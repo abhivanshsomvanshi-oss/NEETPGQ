@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>QBank Console</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B1220">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{
+  --bg:#0B1220; --surface:#141B2E; --surface-2:#1B2438; --border:#28324A;
+  --paper:#EFEEE7; --paper-2:#E4E2D8;
+  --text:#EAEDF5; --text-dim:#9AA5BD; --text-inv:#141B2E;
+  --amber:#E8A33D; --amber-dim:#4A3A1E;
+  --gray:#8A93A6; --red:#E5484D; --green:#2FA36B; --purple:#8B5CF6;
+  --radius:14px;
+  --display:'Space Grotesk',sans-serif; --body:'Inter',sans-serif; --mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--body);height:100%;}
+#app{min-height:100vh;display:flex;flex-direction:column;}
+a{color:var(--amber);}
+h1,h2,h3{font-family:var(--display);margin:0 0 8px;}
+button{font-family:var(--body);cursor:pointer;border:none;border-radius:10px;padding:11px 18px;font-weight:600;font-size:14px;transition:transform .08s ease, opacity .15s;}
+button:active{transform:scale(.97);}
+button.primary{background:var(--amber);color:#241a06;}
+button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);}
+button.danger{background:var(--red);color:#fff;}
+button.subtle{background:var(--surface-2);color:var(--text);}
+button:disabled{opacity:.4;cursor:not-allowed;}
+input,select,textarea{font-family:var(--body);background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:10px;font-size:14px;width:100%;}
+label{font-size:12px;color:var(--text-dim);display:block;margin:10px 0 5px;text-transform:uppercase;letter-spacing:.04em;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(11,18,32,.92);backdrop-filter:blur(8px);z-index:50;}
+.brand{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:.01em;display:flex;align-items:center;gap:8px;}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber);}
+.container{max-width:960px;margin:0 auto;padding:24px 18px 90px;width:100%;flex:1;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+.badge{display:inline-block;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+.badge.active{background:#16321f;color:var(--green);}
+.badge.pending{background:#332a12;color:var(--amber);}
+.badge.revoked{background:#3a1417;color:var(--red);}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+.muted{color:var(--text-dim);font-size:13px;}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto;}
+.tab{padding:10px 14px;font-size:13px;font-weight:600;color:var(--text-dim);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer;}
+.tab.on{color:var(--amber);border-color:var(--amber);}
+.qrow{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--surface-2);border-radius:10px;margin-bottom:8px;}
+.lockicon{opacity:.5;}
+.exam-shell{display:grid;grid-template-columns:1fr 260px;gap:0;flex:1;}
+@media(max-width:760px){.exam-shell{grid-template-columns:1fr;}}
+.exam-main{padding:20px;overflow-y:auto;}
+.exam-side{background:var(--surface);border-left:1px solid var(--border);padding:16px;}
+.timer{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--amber);letter-spacing:.03em;background:var(--amber-dim);padding:8px 14px;border-radius:10px;display:inline-block;}
+.opt{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:9px;cursor:pointer;}
+.opt.sel{border-color:var(--amber);background:#241d0d;}
+.opt.correct{border-color:var(--green);background:#0f2a1c;}
+.opt.wrong{border-color:var(--red);background:#2a1113;}
+.palette{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:12px;}
+.pnum{aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:600;cursor:pointer;border:2px solid transparent;color:#0B1220;}
+.pnum.not_visited{background:var(--gray);}
+.pnum.not_answered{background:var(--red);color:#fff;}
+.pnum.answered{background:var(--green);color:#fff;}
+.pnum.marked{background:var(--purple);color:#fff;}
+.pnum.answered_marked{background:var(--purple);color:#fff;box-shadow:inset 0 0 0 3px var(--green);}
+.pnum.current{border-color:var(--amber);}
+.legend{display:flex;flex-direction:column;gap:5px;font-size:11px;margin-top:14px;color:var(--text-dim);}
+.legend span{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle;}
+.reviewcard{background:var(--paper);color:var(--text-inv);border-radius:var(--radius);padding:18px;margin-bottom:12px;}
+.reviewcard .opt{background:var(--paper-2);color:var(--text-inv);border-color:#d6d3c6;}
+.reviewcard .opt.correct{background:#d8ecdf;border-color:var(--green);}
+.reviewcard .opt.wrong{background:#f4d6d6;border-color:var(--red);}
+.catbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.catbtns button{font-size:12px;padding:7px 10px;}
+.overlay{position:fixed;inset:0;background:rgba(11,18,32,.85);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;max-width:440px;width:100%;max-height:86vh;overflow-y:auto;}
+.locked-banner{background:linear-gradient(120deg,#332a12,#241d0d);border:1px solid var(--amber-dim);border-radius:var(--radius);padding:18px;margin-bottom:16px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);}
+th{color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--border);padding:10px 18px;border-radius:100px;font-size:13px;z-index:300;}
+.spinner{width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite;margin:30px auto;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.qmeta{font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-bottom:6px;}
+.stat-big{font-family:var(--mono);font-size:30px;font-weight:600;}
+.divider{height:1px;background:var(--border);margin:16px 0;}
+</style>
+</head>
+<body>
+<div id="app"><div class="spinner"></div></div>
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://vjqhgxjnzjxqvralcvqq.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqcWhneGpuemp4cXZyYWxjdnFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NjQ1NjQsImV4cCI6MjA5OTM0MDU2NH0.KnYldvE-fH9Rbc5Px3tZ6BjQLhcMDI-Vmg6QX9XPILk';
+const ADMIN_EMAIL = 'goluvansh@qbank.com';
+const TELEGRAM_BOT = 'https://t.me/Neetpgqbank_bot';
+
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const app = document.getElementById('app');
+
+const CATS = [
+  {key:'guess_work', label:'Guess work'},
+  {key:'fact_unknown', label:'Fact unknown'},
+  {key:'concept_unknown', label:'Concept unknown'},
+  {key:'silly_mistake', label:'Silly mistake'},
+];
+const EXAM_CONFIG = {
+  subjectwise:  {label:'Subject-wise', perSet:50, minutesPerFull:45, sequential:false},
+  inicet:       {label:'INICET pattern',        perSet:50, minutesPerFull:45, sequential:true},
+  neetpg:       {label:'NEET PG pattern',       perSet:40, minutesPerFull:42, sequential:true},
+  updated_neetpg:{label:'Updated NEET PG pattern', perSet:36, minutesPerFull:42, sequential:true},
+};
+
+let S = { session:null, profile:null, deviceId:null, view:'loading', data:{} };
+
+function toast(msg){
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),2600);
+}
+function getDeviceId(){
+  let id = localStorage.getItem('qb_device_id');
+  if(!id){ id = 'dev_'+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('qb_device_id', id); }
+  return id;
+}
+function fmtTime(sec){
+  if(sec<0) sec=0;
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=Math.floor(sec%60);
+  return (h>0?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+function statusOf(a){ return a ? a.status : 'not_visited'; }
+
+// ---------- boot ----------
+async function boot(){
+  S.deviceId = getDeviceId();
+  const { data:{ session } } = await sb.auth.getSession();
+  S.session = session;
+  if(session){ await loadProfile(); }
+  render();
+  sb.auth.onAuthStateChange((_e, sess)=>{ S.session = sess; if(sess) loadProfile().then(render); else { S.profile=null; S.view='auth'; render(); } });
+}
+async function loadProfile(){
+  let { data, error } = await sb.from('profiles').select('*').eq('id', S.session.user.id).maybeSingle();
+  if(!data){
+    // safety net in case the DB trigger hasn't fired yet
+    const role = S.session.user.email===ADMIN_EMAIL ? 'admin':'user';
+    const status = S.session.user.email===ADMIN_EMAIL ? 'active':'pending';
+    const ins = await sb.from('profiles').insert({id:S.session.user.id, email:S.session.user.email, role, status}).select().maybeSingle();
+    data = ins.data;
+  }
+  S.profile = data;
+  if(S.profile && S.profile.role!=='admin'){
+    await registerDevice();
+  }
+  S.view = S.profile?.role==='admin' ? 'admin' : 'user';
+}
+async function registerDevice(){
+  const { data: devices } = await sb.from('devices').select('*').eq('user_id', S.profile.id);
+  const mine = (devices||[]).find(d=>d.device_id===S.deviceId);
+  if(mine){
+    await sb.from('devices').update({last_seen:new Date().toISOString()}).eq('id', mine.id);
+    return;
+  }
+  const limit = S.profile.device_limit||1;
+  if((devices||[]).length >= limit){
+    S.deviceBlocked = true;
+    return;
+  }
+  await sb.from('devices').insert({user_id:S.profile.id, device_id:S.deviceId});
+}
+
+// ---------- render dispatcher ----------
+function render(){
+  if(!S.session){ return renderAuth(); }
+  if(S.deviceBlocked){
+    app.innerHTML = `<div class="container"><div class="card"><h2>Device limit reached</h2>
+      <p class="muted">This account is already signed in on the maximum number of allowed devices. Ask your admin to increase your device limit, or sign out of another device.</p>
+      <button class="ghost" id="so">Sign out</button></div></div>`;
+    document.getElementById('so').onclick = signOut;
+    return;
+  }
+  if(S.profile?.role==='admin') return renderAdmin();
+  return renderUser();
+}
+
+function topbar(title, right=''){
+  return `<div class="topbar"><div class="brand"><span class="dot"></span>${title}</div><div class="row">${right}<button class="ghost" id="signoutBtn" style="padding:8px 12px;font-size:12px;">Sign out</button></div></div>`;
+}
+function bindTopbar(){ const b=document.getElementById('signoutBtn'); if(b) b.onclick=signOut; }
+async function signOut(){ await sb.auth.signOut(); S.profile=null; S.deviceBlocked=false; render(); }
+
+// ================= AUTH =================
+function renderAuth(){
+  S.authMode = S.authMode || 'login';
+  app.innerHTML = `
+  <div class="container" style="max-width:420px;padding-top:14vh;">
+    <div style="text-align:center;margin-bottom:22px;">
+      <div class="brand" style="justify-content:center;font-size:24px;"><span class="dot"></span>QBank Console</div>
+      <p class="muted">CBT-style practice for NEET PG / INICET</p>
+    </div>
+    <div class="card">
+      <div class="tabs">
+        <div class="tab ${S.authMode==='login'?'on':''}" data-m="login">Login</div>
+        <div class="tab ${S.authMode==='signup'?'on':''}" data-m="signup">Sign up</div>
+      </div>
+      <label>Email</label><input id="email" type="email" placeholder="you@example.com">
+      <label>Password</label><input id="pass" type="password" placeholder="••••••••">
+      <div id="authErr" class="muted" style="color:var(--red);margin-top:8px;"></div>
+      <button class="primary" id="authGo" style="width:100%;margin-top:16px;">${S.authMode==='login'?'Login':'Create account'}</button>
+    </div>
+  </div>`;
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{S.authMode=t.dataset.m; renderAuth();});
+  document.getElementById('authGo').onclick = async ()=>{
+    const email=document.getElementById('email').value.trim();
+    const password=document.getElementById('pass').value;
+    const errEl=document.getElementById('authErr'); errEl.textContent='';
+    if(!email||!password){ errEl.textContent='Enter email and password.'; return; }
+    if(S.authMode==='signup'){
+      const { error } = await sb.auth.signUp({ email, password });
+      if(error){ errEl.textContent=error.message; return; }
+      toast('Account created. Signing you in…');
+    }
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error){ errEl.textContent=error.message; return; }
+    const { data:{ session } } = await sb.auth.getSession();
+    S.session=session; await loadProfile(); render();
+  };
+}
+
+// ================= USER SIDE =================
+async function renderUser(){
+  S.utab = S.utab || 'qbanks';
+  app.innerHTML = topbar('QBank Console');
+  bindTopbar();
+  const wrap = document.createElement('div'); wrap.className='container';
+  app.appendChild(wrap);
+
+  const isActive = S.profile.status==='active' && (!S.profile.subscription_expiry || new Date(S.profile.subscription_expiry) > new Date());
+
+  wrap.innerHTML += `<div class="tabs">
+    <div class="tab ${S.utab==='qbanks'?'on':''}" data-t="qbanks">QBanks</div>
+    <div class="tab ${S.utab==='stats'?'on':''}" data-t="stats">Today's stats</div>
+    <div class="tab ${S.utab==='decks'?'on':''}" data-t="decks">Category decks</div>
+    <div class="tab ${S.utab==='sub'?'on':''}" data-t="sub">Subscription</div>
+  </div><div id="utabBody"></div>`;
+  wrap.querySelectorAll('.tab[data-t]').forEach(t=>t.onclick=()=>{S.utab=t.dataset.t; renderUser();});
+
+  if(!isActive){
+    document.getElementById('utabBody').innerHTML = `<div class="locked-banner"><h3>🔒 Subscription ${S.profile.status==='pending'?'pending activation':'inactive'}</h3>
+      <p class="muted">Your account is created but not yet activated. Pay via the plan below, send a screenshot to the Telegram bot, and the admin will activate your access.</p>
+      <div class="row" style="margin-top:10px;"><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Pay on Telegram</button></a></div></div>`;
+  }
+
+  if(S.utab==='qbanks') return loadQbanksTab(isActive);
+  if(S.utab==='stats') return loadStatsTab();
+  if(S.utab==='decks') return loadDecksTab();
+  if(S.utab==='sub') return loadSubTab();
+}
+
+async function loadQbanksTab(isActive){
+  const body=document.getElementById('utabBody');
+  body.innerHTML += `<div class="spinner"></div>`;
+  const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
+  let html = '';
+  for(const qb of (qbanks||[])){
+    const { data: sets } = await sb.from('sets').select('*').eq('qbank_id', qb.id).is('user_id', null).order('subject').order('set_number');
+    if(!sets || !sets.length){ continue; }
+    html += `<div class="card"><h3>${qb.name} <span class="badge active" style="background:var(--surface-2);color:var(--text-dim);">${EXAM_CONFIG[qb.exam_type]?.label||qb.exam_type}</span></h3>`;
+    if(qb.exam_type==='subjectwise'){
+      const bySubject={};
+      sets.forEach(s=>{ (bySubject[s.subject||'General']=bySubject[s.subject||'General']||[]).push(s); });
+      for(const subj in bySubject){
+        html += `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${subj}</div>`;
+        for(const s of bySubject[subj]){
+          html += await setRow(s, isActive);
+        }
+      }
+    } else {
+      for(const s of sets){
+        const locked = EXAM_CONFIG[qb.exam_type].sequential && s.set_number>1 ? await isLocked(qb.id, s.set_number) : false;
+        html += await setRow(s, isActive, locked);
+      }
+    }
+    html += `</div>`;
+  }
+  if(!html) html = `<div class="card muted">No qbanks published yet.</div>`;
+  body.innerHTML = body.innerHTML.replace('<div class="spinner"></div>','') ;
+  document.getElementById('utabBody').innerHTML = document.getElementById('utabBody').innerHTML.split('<div class="spinner"></div>')[0] + html;
+  wireSetRows(isActive);
+}
+async function isLocked(qbankId, setNumber){
+  const { data: prevSet } = await sb.from('sets').select('id').eq('qbank_id', qbankId).is('user_id', null).eq('set_number', setNumber-1).eq('set_type','main').maybeSingle();
+  if(!prevSet) return false;
+  const { data: att } = await sb.from('attempts').select('status').eq('user_id', S.profile.id).eq('set_id', prevSet.id).eq('status','submitted').maybeSingle();
+  return !att;
+}
+async function setRow(s, isActive, locked=false){
+  const n = s.question_ids.length;
+  return `<div class="qrow" data-set="${s.id}">
+    <div><b>Set ${s.set_number}</b> · ${n} questions · ${s.duration_minutes} min ${locked?'<span class="lockicon">🔒</span>':''}</div>
+    <button class="${isActive&&!locked?'primary':'ghost'}" data-startset="${s.id}" ${(!isActive||locked)?'disabled':''}>${!isActive?'Locked':locked?'Complete previous':'Start'}</button>
+  </div>`;
+}
+function wireSetRows(){
+  document.querySelectorAll('[data-startset]').forEach(b=>{
+    b.onclick = ()=> startAttempt(b.dataset.startset);
+  });
+}
+
+async function loadStatsTab(){
+  const body=document.getElementById('utabBody');
+  const start = new Date(); start.setHours(0,0,0,0);
+  const { data: attempts } = await sb.from('attempts').select('*, sets(question_ids)').eq('user_id', S.profile.id).eq('status','submitted').gte('submitted_at', start.toISOString());
+  let total=0, correct=0, wrong=0;
+  for(const a of (attempts||[])){
+    for(const qid in (a.answers||{})){
+      const ans=a.answers[qid];
+      if(ans.status==='answered'||ans.status==='answered_marked'){ total++; }
+    }
+  }
+  // fetch correctness lazily
+  let corrCount=0, wrongCount=0;
+  for(const a of (attempts||[])){
+    const qids=Object.keys(a.answers||{}).filter(k=>['answered','answered_marked'].includes(a.answers[k].status));
+    if(!qids.length) continue;
+    const { data: qs } = await sb.from('questions').select('id, correct_index').in('id', qids);
+    qs.forEach(q=>{ const sel=a.answers[q.id].selected; if(sel===q.correct_index) corrCount++; else wrongCount++; });
+  }
+  document.getElementById('utabBody').innerHTML += `<div class="card"><h3>Today</h3>
+    <div class="row" style="gap:26px;">
+      <div><div class="stat-big">${total}</div><div class="muted">Attempted</div></div>
+      <div><div class="stat-big" style="color:var(--green)">${corrCount}</div><div class="muted">Correct</div></div>
+      <div><div class="stat-big" style="color:var(--red)">${wrongCount}</div><div class="muted">Wrong</div></div>
+    </div></div>`;
+}
+
+async function loadDecksTab(){
+  const body=document.getElementById('utabBody');
+  const { data: cats } = await sb.from('categorizations').select('*, questions(qbank_id)').eq('user_id', S.profile.id);
+  if(!cats || !cats.length){ body.innerHTML += `<div class="card muted">No tagged questions yet. Categorise wrong answers during review to build decks here.</div>`; return; }
+  const byQbank={};
+  cats.forEach(c=>{ const qb=c.questions.qbank_id; byQbank[qb]=byQbank[qb]||{}; (byQbank[qb][c.category]=byQbank[qb][c.category]||[]).push(c.question_id); });
+  let html='';
+  for(const qbId in byQbank){
+    const { data: qb } = await sb.from('qbanks').select('name').eq('id', qbId).maybeSingle();
+    html += `<div class="card"><h3>${qb?.name||'QBank'}</h3>`;
+    for(const cat of CATS){
+      const ids = byQbank[qbId][cat.key];
+      if(!ids || !ids.length) continue;
+      const dur = Math.round(ids.length*0.9*10)/10;
+      html += `<div class="qrow"><div><b>${cat.label}</b> · ${ids.length} q · ${dur} min</div><button class="primary" data-deck='${qbId}|${cat.key}'>Start</button></div>`;
+    }
+    html += `</div>`;
+  }
+  body.innerHTML += html;
+  document.querySelectorAll('[data-deck]').forEach(b=>{
+    b.onclick = ()=> startCategoryDeck(...b.dataset.deck.split('|'));
+  });
+}
+async function startCategoryDeck(qbankId, category){
+  const { data: cats } = await sb.from('categorizations').select('question_id, questions!inner(qbank_id)').eq('user_id', S.profile.id).eq('category', category).eq('questions.qbank_id', qbankId);
+  const ids = cats.map(c=>c.question_id);
+  const dur = Math.round(ids.length*0.9*10)/10;
+  const { data: existing } = await sb.from('sets').select('*').eq('qbank_id', qbankId).eq('user_id', S.profile.id).eq('category', category).maybeSingle();
+  let setRow = existing;
+  if(existing){
+    const upd = await sb.from('sets').update({question_ids:ids, duration_minutes:dur}).eq('id', existing.id).select().maybeSingle();
+    setRow = upd.data;
+  } else {
+    const ins = await sb.from('sets').insert({qbank_id:qbankId, user_id:S.profile.id, set_type:'category', category, question_ids:ids, duration_minutes:dur, set_number:1}).select().maybeSingle();
+    setRow = ins.data;
+  }
+  startAttempt(setRow.id);
+}
+
+async function loadSubTab(){
+  const body=document.getElementById('utabBody');
+  const { data: plans } = await sb.from('plans').select('*').order('display_order');
+  let html = `<div class="card"><h3>Your account</h3>
+    <p>Status: <span class="badge ${S.profile.status}">${S.profile.status}</span></p>
+    <p class="muted">${S.profile.subscription_expiry ? 'Valid until '+new Date(S.profile.subscription_expiry).toLocaleDateString() : 'No active period'}</p>
+    <p class="muted">Devices allowed: ${S.profile.device_limit}</p>
+  </div><div class="grid">`;
+  (plans||[]).forEach(p=>{
+    html += `<div class="card"><h3>${p.name}</h3><div class="stat-big">₹${p.price}</div><div class="muted">${p.duration_days} days</div></div>`;
+  });
+  html += `</div><div class="card"><p>Pay for a plan, then send the payment screenshot to the bot below. Admin will activate your account.</p><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Open Telegram bot</button></a></div>`;
+  body.innerHTML += html;
+}
+
+// ================= EXAM PLAYER =================
+async function startAttempt(setId){
+  const { data: set } = await sb.from('sets').select('*, qbanks(exam_type)').eq('id', setId).maybeSingle();
+  let { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', setId).eq('status','in_progress').maybeSingle();
+  const { data: questions } = await sb.from('questions').select('*').in('id', set.question_ids);
+  const ordered = set.question_ids.map(id=>questions.find(q=>q.id===id)).filter(Boolean);
+  if(!att){
+    const initAnswers={}; ordered.forEach(q=>initAnswers[q.id]={selected:null,status:'not_visited'});
+    const ins = await sb.from('attempts').insert({user_id:S.profile.id, set_id:setId, answers:initAnswers}).select().maybeSingle();
+    att = ins.data;
+  }
+  const elapsedSec = Math.floor((Date.now()-new Date(att.started_at).getTime())/1000);
+  const totalSec = Math.round(set.duration_minutes*60);
+  if(elapsedSec >= totalSec){ await submitAttempt(att, set, ordered, true); return; }
+  S.exam = { set, att, questions:ordered, idx:0, totalSec, elapsedAtLoad:elapsedSec };
+  S.view='exam'; renderExam();
+  startTimer();
+}
+let timerHandle=null;
+function startTimer(){
+  clearInterval(timerHandle);
+  const t0 = Date.now();
+  timerHandle = setInterval(()=>{
+    const elapsed = S.exam.elapsedAtLoad + Math.floor((Date.now()-t0)/1000);
+    const remain = S.exam.totalSec - elapsed;
+    const el = document.getElementById('examTimer');
+    if(el) el.textContent = fmtTime(remain);
+    if(remain<=0){ clearInterval(timerHandle); submitAttempt(S.exam.att, S.exam.set, S.exam.questions, true); }
+  },1000);
+}
+function renderExam(){
+  const { set, att, questions, idx } = S.exam;
+  const q = questions[idx];
+  if(att.answers[q.id].status==='not_visited') att.answers[q.id].status='not_answered';
+  app.innerHTML = `<div class="topbar"><div class="brand"><span class="dot"></span>Set ${set.set_number||''} ${set.category?('· '+set.category.replace('_',' ')):''}</div><span class="timer" id="examTimer">${fmtTime(S.exam.totalSec-S.exam.elapsedAtLoad)}</span></div>
+  <div class="exam-shell">
+    <div class="exam-main">
+      <div class="qmeta">Question ${idx+1} of ${questions.length}</div>
+      <h2 style="font-family:var(--body);font-weight:600;font-size:17px;line-height:1.5;">${escapeHtml(q.q_text)}</h2>
+      <div id="opts"></div>
+      <div class="row" style="margin-top:16px;">
+        <button class="subtle" id="prevQ" ${idx===0?'disabled':''}>◀ Prev</button>
+        <button class="ghost" id="clearQ">Clear response</button>
+        <button class="subtle" id="markQ">${['marked','answered_marked'].includes(att.answers[q.id].status)?'Unmark review':'Mark for review'}</button>
+        <button class="primary" id="nextQ" ${idx===questions.length-1?'disabled':''}>Save & Next ▶</button>
+      </div>
+      <div class="divider"></div>
+      <button class="danger" id="submitSet">Submit set</button>
+    </div>
+    <div class="exam-side">
+      <div class="muted" style="font-size:12px;">Question palette</div>
+      <div class="palette" id="palette"></div>
+      <div class="legend">
+        <div><span style="background:var(--gray)"></span>Not visited</div>
+        <div><span style="background:var(--red)"></span>Not answered</div>
+        <div><span style="background:var(--green)"></span>Answered</div>
+        <div><span style="background:var(--purple)"></span>Marked for review</div>
+        <div><span style="background:var(--purple);box-shadow:inset 0 0 0 2px var(--green)"></span>Answered & marked</div>
+      </div>
+    </div>
+  </div>`;
+  renderOpts(); renderPalette();
+  document.getElementById('prevQ').onclick=()=>{ saveAttemptSoft(); S.exam.idx--; renderExam(); };
+  document.getElementById('nextQ').onclick=()=>{ saveAttemptSoft(); S.exam.idx++; renderExam(); };
+  document.getElementById('clearQ').onclick=()=>{ const a=att.answers[q.id]; a.selected=null; a.status = a.status==='answered_marked'?'marked':'not_answered'; saveAttemptSoft(); renderExam(); };
+  document.getElementById('markQ').onclick=()=>{ const a=att.answers[q.id]; if(['marked','answered_marked'].includes(a.status)){ a.status = a.selected!=null?'answered':'not_answered'; } else { a.status = a.selected!=null?'answered_marked':'marked'; } saveAttemptSoft(); renderExam(); };
+  document.getElementById('submitSet').onclick=()=>{
+    if(confirm('Submit this set now? You cannot resume it after submission.')) submitAttempt(att,set,questions,false);
+  };
+}
+function renderOpts(){
+  const { att, questions, idx } = S.exam;
+  const q=questions[idx]; const a=att.answers[q.id];
+  const el=document.getElementById('opts');
+  el.innerHTML = q.options.map((o,i)=>`<div class="opt ${a.selected===i?'sel':''}" data-i="${i}">${escapeHtml(o)}</div>`).join('');
+  el.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{
+    const i=+o.dataset.i;
+    a.selected=i; a.status = ['marked','answered_marked'].includes(a.status)?'answered_marked':'answered';
+    saveAttemptSoft(); renderOpts(); renderPalette();
+    document.getElementById('markQ').textContent = ['marked','answered_marked'].includes(a.status)?'Unmark review':'Mark for review';
+  });
+}
+function renderPalette(){
+  const { att, questions, idx } = S.exam;
+  document.getElementById('palette').innerHTML = questions.map((q,i)=>`<div class="pnum ${statusOf(att.answers[q.id])} ${i===idx?'current':''}" data-i="${i}">${i+1}</div>`).join('');
+  document.querySelectorAll('.pnum').forEach(p=>p.onclick=()=>{ saveAttemptSoft(); S.exam.idx=+p.dataset.i; renderExam(); });
+}
+let saveTimeout=null;
+function saveAttemptSoft(){
+  clearTimeout(saveTimeout);
+  saveTimeout=setTimeout(async ()=>{
+    await sb.from('attempts').update({answers:S.exam.att.answers}).eq('id', S.exam.att.id);
+  }, 400);
+}
+async function submitAttempt(att, set, questions, auto){
+  clearInterval(timerHandle);
+  const { data: qs } = await sb.from('questions').select('id, correct_index').in('id', set.question_ids);
+  let score=0;
+  for(const q of qs){
+    const a=att.answers[q.id];
+    if(a && (a.status==='answered'||a.status==='answered_marked')){
+      score += a.selected===q.correct_index ? 4 : -1;
+    }
+  }
+  await sb.from('attempts').update({answers:att.answers, status:'submitted', submitted_at:new Date().toISOString(), score}).eq('id', att.id);
+  att.status='submitted'; att.score=score;
+  toast(auto? 'Time up — set auto-submitted' : 'Set submitted');
+  S.review = { att, set, questions, showExpl:false };
+  renderReviewChoice();
+}
+function renderReviewChoice(){
+  app.innerHTML = `<div class="container" style="max-width:480px;padding-top:12vh;text-align:center;">
+    <div class="card">
+      <h2>Set submitted</h2>
+      <p class="muted">Score: ${S.review.att.score>0?'+':''}${S.review.att.score}</p>
+      <div class="row" style="justify-content:center;margin-top:14px;">
+        <button class="primary" id="rwo">Review without explanation</button>
+        <button class="subtle" id="rwith">Review with explanation</button>
+        <button class="ghost" id="backHome">Back to dashboard</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('rwo').onclick=()=>renderReview(false);
+  document.getElementById('rwith').onclick=()=>renderReview(true);
+  document.getElementById('backHome').onclick=()=>{ S.view='user'; renderUser(); };
+}
+async function renderReview(withExpl, i=0){
+  const { att, questions } = S.review;
+  const q = questions[i]; const a = att.answers[q.id];
+  const { data: existingCat } = await sb.from('categorizations').select('category').eq('user_id', S.profile.id).eq('question_id', q.id).maybeSingle();
+  app.innerHTML = `<div class="topbar"><div class="brand"><span class="dot"></span>Review ${i+1}/${questions.length}</div><button class="ghost" id="closeRev" style="padding:8px 12px;font-size:12px;">Close</button></div>
+  <div class="container">
+    <div class="reviewcard" id="revCapture">
+      <div class="qmeta" style="color:#555">Question ${i+1}</div>
+      <h3 style="font-family:var(--body);">${escapeHtml(q.q_text)}</h3>
+      <div id="revOpts"></div>
+      ${withExpl?`<div class="divider"></div><div><b>Explanation</b><p>${escapeHtml(q.explanation||'No explanation provided.')}</p></div>`:''}
+    </div>
+    ${withExpl?`<div class="row"><button class="subtle" id="ssWith">📸 Save screenshot (with explanation)</button><button class="subtle" id="ssWithout">📸 Save screenshot (without explanation)</button></div>`
+      :`<div class="card"><div class="muted" style="margin-bottom:6px;">Why did this go wrong?</div><div class="catbtns" id="catbtns"></div></div>`}
+    <div class="row" style="margin-top:14px;"><button class="ghost" id="pv" ${i===0?'disabled':''}>◀ Prev</button><button class="primary" id="nx" ${i===questions.length-1?'disabled':''}>Next ▶</button></div>
+  </div>`;
+  const optsEl=document.getElementById('revOpts');
+  optsEl.innerHTML = q.options.map((o,idx)=>{
+    let cls='';
+    if(idx===q.correct_index) cls='correct';
+    else if(a.selected===idx) cls='wrong';
+    return `<div class="opt ${cls}">${escapeHtml(o)}</div>`;
+  }).join('');
+  document.getElementById('closeRev').onclick=()=>{ S.view='user'; renderUser(); };
+  document.getElementById('pv').onclick=()=>renderReview(withExpl, i-1);
+  document.getElementById('nx').onclick=()=>renderReview(withExpl, i+1);
+  if(!withExpl){
+    const cb=document.getElementById('catbtns');
+    cb.innerHTML = CATS.map(c=>`<button class="${existingCat?.category===c.key?'primary':'subtle'}" data-c="${c.key}">${c.label}</button>`).join('');
+    cb.querySelectorAll('button').forEach(b=>b.onclick=async ()=>{
+      await sb.from('categorizations').upsert({user_id:S.profile.id, question_id:q.id, category:b.dataset.c}, {onConflict:'user_id,question_id'});
+      toast('Tagged: '+b.textContent);
+      renderReview(withExpl,i);
+    });
+  } else {
+    document.getElementById('ssWith').onclick=()=>captureShot(true);
+    document.getElementById('ssWithout').onclick=()=>captureShot(false);
+  }
+}
+async function captureShot(withExpl){
+  const node=document.getElementById('revCapture');
+  const explDiv = node.querySelector('.divider')?.nextElementSibling;
+  const dividerEl = node.querySelector('.divider');
+  let hid=false;
+  if(!withExpl && dividerEl){ dividerEl.style.display='none'; if(explDiv) explDiv.style.display='none'; hid=true; }
+  const canvas = await html2canvas(node, {backgroundColor:'#EFEEE7'});
+  if(hid){ dividerEl.style.display=''; if(explDiv) explDiv.style.display=''; }
+  const link=document.createElement('a');
+  link.download = 'question_'+Date.now()+'.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  toast('Image saved to downloads');
+}
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// override render() to route to exam view
+const _origRender = render;
+render = function(){
+  if(S.session && S.view==='exam' && S.exam){ return renderExam(); }
+  return _origRender();
+};
+
+// ================= ADMIN SIDE =================
+async function renderAdmin(){
+  S.atab = S.atab || 'upload';
+  app.innerHTML = topbar('QBank Console · Admin');
+  bindTopbar();
+  const wrap=document.createElement('div'); wrap.className='container'; app.appendChild(wrap);
+  wrap.innerHTML = `<div class="tabs">
+    <div class="tab ${S.atab==='upload'?'on':''}" data-t="upload">Upload</div>
+    <div class="tab ${S.atab==='qbanks'?'on':''}" data-t="qbanks">Manage QBanks</div>
+    <div class="tab ${S.atab==='users'?'on':''}" data-t="users">Users</div>
+    <div class="tab ${S.atab==='plans'?'on':''}" data-t="plans">Plans</div>
+    <div class="tab ${S.atab==='attempt'?'on':''}" data-t="attempt">Practice (user view)</div>
+  </div><div id="atabBody"></div>`;
+  wrap.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{S.atab=t.dataset.t; renderAdmin();});
+  if(S.atab==='upload') return adminUpload();
+  if(S.atab==='qbanks') return adminQbanks();
+  if(S.atab==='users') return adminUsers();
+  if(S.atab==='plans') return adminPlans();
+  if(S.atab==='attempt'){ S.view='user'; return renderUser(); }
+}
+
+function adminUpload(){
+  const body=document.getElementById('atabBody');
+  body.innerHTML = `<div class="card">
+    <h3>Upload questions</h3>
+    <p class="muted">Accepts a JSON array or NDJSON (one object per line). Each object: {"question","options":[4],"answer":0,"explanation":"","subject":""}. "answer" is the 0-based index of the correct option.</p>
+    <label>QBank name</label><input id="qbName" placeholder="e.g. BTR Batch 2026">
+    <label>File (.json / .ndjson)</label><input id="qbFile" type="file" accept=".json,.ndjson,.txt">
+    <button class="primary" id="qbUpload" style="margin-top:14px;">Parse & upload</button>
+    <div id="upStatus" class="muted" style="margin-top:10px;"></div>
+  </div>
+  <div class="card"><h3>Telegram payments</h3><p class="muted">Payment screenshots are sent to the bot below; open it to view them and then activate the matching user under the Users tab.</p><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Open @Neetpgqbank_bot</button></a></div>`;
+  document.getElementById('qbUpload').onclick = async ()=>{
+    const name=document.getElementById('qbName').value.trim();
+    const file=document.getElementById('qbFile').files[0];
+    const st=document.getElementById('upStatus');
+    if(!name||!file){ st.textContent='Give a name and choose a file.'; return; }
+    st.textContent='Reading file…';
+    const text = await file.text();
+    let rows=[];
+    try{ const parsed=JSON.parse(text); rows = Array.isArray(parsed)?parsed:[parsed]; }
+    catch(e){ rows = text.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ try{return JSON.parse(l);}catch(_){return null;} }).filter(Boolean); }
+    if(!rows.length){ st.textContent='Could not parse any questions from this file.'; return; }
+    st.textContent='Creating qbank…';
+    const { data: qb, error: qbErr } = await sb.from('qbanks').insert({name, exam_type:'subjectwise'}).select().maybeSingle();
+    if(qbErr){ st.textContent='Error: '+qbErr.message; return; }
+    st.textContent=`Uploading ${rows.length} questions…`;
+    const payload = rows.map((r,i)=>({
+      qbank_id: qb.id,
+      q_text: r.question||r.q_text||r.q||'',
+      options: r.options||r.opts||[],
+      correct_index: typeof r.answer==='number'?r.answer: typeof r.correct_index==='number'?r.correct_index: letterToIndex(r.answer||r.correct),
+      explanation: r.explanation||r.expl||'',
+      subject: r.subject||null,
+      order_index: i,
+    })).filter(q=>q.q_text && q.options?.length);
+    const { error: insErr } = await sb.from('questions').insert(payload);
+    if(insErr){ st.textContent='Upload error: '+insErr.message; return; }
+    st.textContent=`Done — ${payload.length} questions added to "${name}". Assign its exam type under "Manage QBanks".`;
+    document.getElementById('qbName').value=''; document.getElementById('qbFile').value='';
+  };
+}
+function letterToIndex(v){
+  if(v==null) return 0;
+  if(typeof v==='number') return v;
+  const m={A:0,B:1,C:2,D:3}; return m[String(v).trim().toUpperCase()] ?? 0;
+}
+
+async function adminQbanks(){
+  const body=document.getElementById('atabBody');
+  const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
+  let html = `<div class="card"><h3>Assign exam type & generate sets</h3><p class="muted">Select one or more qbanks, choose the pattern, then generate. Re-generating replaces existing shared sets for the selected qbanks.</p>
+  <div id="qbCheckList">`;
+  (qbanks||[]).forEach(qb=>{
+    html += `<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:8px 0;">
+      <input type="checkbox" value="${qb.id}" class="qbchk" style="width:auto;"> ${qb.name} <span class="muted">(currently: ${EXAM_CONFIG[qb.exam_type]?.label||qb.exam_type})</span></label>`;
+  });
+  html += `</div>
+  <label>Pattern</label>
+  <select id="examTypeSel">
+    <option value="subjectwise">Subject-wise (50 q / 45 min sets, sequential subject groups)</option>
+    <option value="inicet">INICET pattern (4×50 q, 45 min, sequential)</option>
+    <option value="neetpg">NEET PG pattern (5×40 q, 42 min, sequential)</option>
+    <option value="updated_neetpg">Updated NEET PG (5×36 q, 42 min, sequential)</option>
+  </select>
+  <button class="primary" id="genSets" style="margin-top:14px;">Generate sets</button>
+  <div id="genStatus" class="muted" style="margin-top:8px;"></div>
+  </div>
+  <div class="card"><h3>All qbanks</h3><table><tr><th>Name</th><th>Type</th><th>Created</th></tr>
+  ${(qbanks||[]).map(qb=>`<tr><td>${qb.name}</td><td>${EXAM_CONFIG[qb.exam_type]?.label||qb.exam_type}</td><td>${new Date(qb.created_at).toLocaleDateString()}</td></tr>`).join('')}
+  </table></div>`;
+  body.innerHTML = html;
+  document.getElementById('genSets').onclick = async ()=>{
+    const ids = [...document.querySelectorAll('.qbchk:checked')].map(c=>c.value);
+    const type = document.getElementById('examTypeSel').value;
+    const st=document.getElementById('genStatus');
+    if(!ids.length){ st.textContent='Select at least one qbank.'; return; }
+    for(const id of ids){
+      st.textContent='Processing '+id+'…';
+      await sb.from('qbanks').update({exam_type:type}).eq('id', id);
+      await sb.from('sets').delete().eq('qbank_id', id).is('user_id', null);
+      const { data: qs } = await sb.from('questions').select('*').eq('qbank_id', id).order('order_index');
+      const cfg = EXAM_CONFIG[type];
+      let setsToInsert = [];
+      if(type==='subjectwise'){
+        const bySubject={};
+        qs.forEach(q=>{ (bySubject[q.subject||'General']=bySubject[q.subject||'General']||[]).push(q.id); });
+        for(const subj in bySubject){
+          setsToInsert = setsToInsert.concat(chunkToSets(bySubject[subj], cfg.perSet, cfg.minutesPerFull, subj));
+        }
+      } else {
+        const ids2 = qs.map(q=>q.id);
+        setsToInsert = chunkToSets(ids2, cfg.perSet, cfg.minutesPerFull, null);
+      }
+      if(setsToInsert.length){
+        await sb.from('sets').insert(setsToInsert.map(s=>({...s, qbank_id:id})));
+      }
+    }
+    st.textContent='Done. Sets generated for '+ids.length+' qbank(s).';
+    adminQbanks();
+  };
+}
+function chunkToSets(ids, perSet, fullMinutes, subject){
+  const out=[]; let setNum=1;
+  for(let i=0;i<ids.length;i+=perSet){
+    const chunk = ids.slice(i, i+perSet);
+    const duration = chunk.length===perSet ? fullMinutes : Math.round(chunk.length*0.9*10)/10;
+    out.push({set_number:setNum++, set_type:'main', subject, question_ids:chunk, duration_minutes:duration});
+  }
+  return out;
+}
+
+async function adminUsers(){
+  const body=document.getElementById('atabBody');
+  const { data: users } = await sb.from('profiles').select('*').neq('role','admin').order('created_at',{ascending:false});
+  body.innerHTML = `<div class="card"><h3>Users</h3><table id="usersTbl"><tr><th>Email</th><th>Status</th><th>Expiry</th><th>Devices</th><th></th></tr>
+  ${(users||[]).map(u=>`<tr data-u="${u.id}">
+    <td>${u.email}</td>
+    <td><span class="badge ${u.status}">${u.status}</span></td>
+    <td><input type="date" class="expInput" value="${u.subscription_expiry?u.subscription_expiry.slice(0,10):''}" style="width:140px;"></td>
+    <td><input type="number" min="1" class="devInput" value="${u.device_limit}" style="width:60px;"></td>
+    <td class="row" style="gap:6px;">
+      <button class="primary saveBtn" style="padding:6px 10px;font-size:12px;">Save</button>
+      <button class="${u.status==='active'?'danger':'subtle'} toggleBtn" style="padding:6px 10px;font-size:12px;">${u.status==='active'?'Revoke':'Activate'}</button>
+    </td></tr>`).join('')}
+  </table></div>`;
+  body.querySelectorAll('tr[data-u]').forEach(tr=>{
+    const uid=tr.dataset.u;
+    tr.querySelector('.saveBtn').onclick=async ()=>{
+      const exp=tr.querySelector('.expInput').value;
+      const dev=+tr.querySelector('.devInput').value||1;
+      await sb.from('profiles').update({subscription_expiry: exp? new Date(exp).toISOString():null, device_limit:dev}).eq('id', uid);
+      toast('Saved');
+    };
+    tr.querySelector('.toggleBtn').onclick=async ()=>{
+      const cur = tr.querySelector('.badge').textContent;
+      const next = cur==='active' ? 'revoked' : 'active';
+      await sb.from('profiles').update({status:next}).eq('id', uid);
+      if(next==='revoked'){ await sb.from('devices').delete().eq('user_id', uid); }
+      adminUsers();
+    };
+  });
+}
+
+async function adminPlans(){
+  const body=document.getElementById('atabBody');
+  const { data: plans } = await sb.from('plans').select('*').order('display_order');
+  body.innerHTML = `<div class="card"><h3>Subscription plans</h3>
+  <table>${(plans||[]).map(p=>`<tr><td>${p.name}</td><td>₹${p.price}</td><td>${p.duration_days} days</td><td><button class="danger delBtn" data-id="${p.id}" style="padding:5px 9px;font-size:11px;">Delete</button></td></tr>`).join('')}</table>
+  <div class="divider"></div>
+  <label>Plan name</label><input id="pName" placeholder="e.g. Monthly">
+  <label>Price (₹)</label><input id="pPrice" type="number">
+  <label>Duration (days)</label><input id="pDays" type="number">
+  <button class="primary" id="pAdd" style="margin-top:12px;">Add plan</button>
+  </div>`;
+  document.getElementById('pAdd').onclick=async ()=>{
+    const name=document.getElementById('pName').value.trim();
+    const price=+document.getElementById('pPrice').value;
+    const days=+document.getElementById('pDays').value;
+    if(!name||!price||!days){ toast('Fill all plan fields'); return; }
+    await sb.from('plans').insert({name, price, duration_days:days});
+    adminPlans();
+  };
+  body.querySelectorAll('.delBtn').forEach(b=>b.onclick=async ()=>{ await sb.from('plans').delete().eq('id', b.dataset.id); adminPlans(); });
+}
+
+boot();
+if('serviceWorker' in navigator){ window.addEventListener('load', ()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+</script>
+</body>
+</html>
