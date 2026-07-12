@@ -143,13 +143,22 @@ async function boot(){
   sb.auth.onAuthStateChange((_e, sess)=>{ S.session = sess; if(sess) loadProfile().then(render); else { S.profile=null; S.view='auth'; render(); } });
 }
 async function loadProfile(){
+  const email = S.session.user.email;
+  const isAdminEmail = email === ADMIN_EMAIL;
   let { data, error } = await sb.from('profiles').select('*').eq('id', S.session.user.id).maybeSingle();
   if(!data){
-    // safety net in case the DB trigger hasn't fired yet
-    const role = S.session.user.email===ADMIN_EMAIL ? 'admin':'user';
-    const status = S.session.user.email===ADMIN_EMAIL ? 'active':'pending';
-    const ins = await sb.from('profiles').insert({id:S.session.user.id, email:S.session.user.email, role, status}).select().maybeSingle();
+    const ins = await sb.from('profiles').upsert({
+      id:S.session.user.id, email,
+      role: isAdminEmail?'admin':'user',
+      status: isAdminEmail?'active':'pending'
+    }, {onConflict:'id'}).select().maybeSingle();
     data = ins.data;
+  }
+  // self-heal: the admin email must always carry admin role + active status,
+  // even if an earlier signup/insert race left it out of sync
+  if(isAdminEmail && data && (data.role!=='admin' || data.status!=='active')){
+    const upd = await sb.from('profiles').update({role:'admin', status:'active'}).eq('id', S.session.user.id).select().maybeSingle();
+    if(upd.data) data = upd.data;
   }
   S.profile = data;
   if(S.profile && S.profile.role!=='admin'){
@@ -233,8 +242,10 @@ function renderAuth(){
 // ================= USER SIDE =================
 async function renderUser(){
   S.utab = S.utab || 'qbanks';
-  app.innerHTML = topbar('QBank Console');
+  const adminBackBtn = S.profile?.role==='admin' ? `<button class="primary" id="backToAdminBtn" style="padding:8px 12px;font-size:12px;">← Back to Admin</button>` : '';
+  app.innerHTML = topbar('QBank Console', adminBackBtn);
   bindTopbar();
+  if(document.getElementById('backToAdminBtn')) document.getElementById('backToAdminBtn').onclick = ()=>{ S.view='admin'; renderAdmin(); };
   const wrap = document.createElement('div'); wrap.className='container';
   app.appendChild(wrap);
 
@@ -279,9 +290,15 @@ async function loadQbanksTab(isActive){
         }
       }
     } else {
+      let allDone = true;
       for(const s of sets){
         const locked = EXAM_CONFIG[qb.exam_type].sequential && s.set_number>1 ? await isLocked(qb.id, s.set_number) : false;
         html += await setRow(s, isActive, locked);
+        const { data: doneAtt } = await sb.from('attempts').select('id').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').maybeSingle();
+        if(!doneAtt) allDone = false;
+      }
+      if(allDone){
+        html += `<div class="row" style="margin-top:8px;"><button class="subtle" data-fulltest="${qb.id}">📊 Review full test (all sections)</button></div>`;
       }
     }
     html += `</div>`;
@@ -299,15 +316,48 @@ async function isLocked(qbankId, setNumber){
 }
 async function setRow(s, isActive, locked=false){
   const n = s.question_ids.length;
-  return `<div class="qrow" data-set="${s.id}">
-    <div><b>Set ${s.set_number}</b> · ${n} questions · ${s.duration_minutes} min ${locked?'<span class="lockicon">🔒</span>':''}</div>
-    <button class="${isActive&&!locked?'primary':'ghost'}" data-startset="${s.id}" ${(!isActive||locked)?'disabled':''}>${!isActive?'Locked':locked?'Complete previous':'Start'}</button>
+  const { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').order('submitted_at',{ascending:false}).limit(1).maybeSingle();
+  let statsHtml = '';
+  if(att){
+    const { data: stats } = await sb.rpc('set_rank_stats', { p_set_id: s.id, p_user_id: S.profile.id });
+    const row = Array.isArray(stats) ? stats[0] : stats;
+    const pct = row && row.user_total ? Math.round((row.user_correct/row.user_total)*1000)/10 : null;
+    statsHtml = `<div class="muted" style="font-size:11px;margin-top:3px;">
+      ✅ ${att.correct_count ?? '—'}/${att.total_questions ?? n} correct (${pct!=null?pct+'%':'—'}) · score ${att.score>0?'+':''}${att.score}
+      ${row && row.rank ? ` · rank ${row.rank}/${row.total_attempts} · ${row.percentile}ᵗʰ percentile` : ''}
+    </div>`;
+  }
+  return `<div class="qrow" style="flex-direction:column;align-items:stretch;gap:6px;">
+    <div class="row" style="justify-content:space-between;">
+      <div><b>Set ${s.set_number}</b> · ${n} questions · ${s.duration_minutes} min ${locked?'<span class="lockicon">🔒</span>':''}</div>
+      <button class="${isActive&&!locked?'primary':'ghost'}" data-startset="${s.id}" ${(!isActive||locked)?'disabled':''}>${!isActive?'Locked':locked?'Complete previous':att?'Retake':'Start'}</button>
+    </div>
+    ${statsHtml}
   </div>`;
 }
 function wireSetRows(){
   document.querySelectorAll('[data-startset]').forEach(b=>{
     b.onclick = ()=> startAttempt(b.dataset.startset);
   });
+  document.querySelectorAll('[data-fulltest]').forEach(b=>{
+    b.onclick = ()=> loadFullTestReview(b.dataset.fulltest);
+  });
+}
+async function loadFullTestReview(qbankId){
+  const { data: sets } = await sb.from('sets').select('*').eq('qbank_id', qbankId).is('user_id', null).eq('set_type','main').order('set_number');
+  let allQuestions = [], mergedAnswers = {}, totalScore = 0, totalCorrect = 0, totalQ = 0;
+  for(const s of sets){
+    const { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').order('submitted_at',{ascending:false}).limit(1).maybeSingle();
+    if(!att){ toast('Complete every section first'); return; }
+    const { data: qs } = await sb.from('questions').select('*').in('id', s.question_ids);
+    const ordered = s.question_ids.map(id=>qs.find(q=>q.id===id)).filter(Boolean);
+    allQuestions = allQuestions.concat(ordered);
+    Object.assign(mergedAnswers, att.answers);
+    totalScore += (att.score||0); totalCorrect += (att.correct_count||0); totalQ += (att.total_questions||ordered.length);
+  }
+  const fakeAtt = { id:null, answers: mergedAnswers, score: totalScore, correct_count: totalCorrect, total_questions: totalQ };
+  S.review = { att: fakeAtt, set: {question_ids: allQuestions.map(q=>q.id)}, questions: allQuestions, showExpl:false };
+  renderReviewChoice();
 }
 
 async function loadStatsTab(){
@@ -488,14 +538,14 @@ function saveAttemptSoft(){
 async function submitAttempt(att, set, questions, auto){
   clearInterval(timerHandle);
   const { data: qs } = await sb.from('questions').select('id, correct_index').in('id', set.question_ids);
-  let score=0;
+  let score=0, correctCount=0;
   for(const q of qs){
     const a=att.answers[q.id];
     if(a && (a.status==='answered'||a.status==='answered_marked')){
-      score += a.selected===q.correct_index ? 4 : -1;
+      if(a.selected===q.correct_index){ score+=4; correctCount++; } else { score-=1; }
     }
   }
-  await sb.from('attempts').update({answers:att.answers, status:'submitted', submitted_at:new Date().toISOString(), score}).eq('id', att.id);
+  await sb.from('attempts').update({answers:att.answers, status:'submitted', submitted_at:new Date().toISOString(), score, correct_count:correctCount, total_questions:qs.length}).eq('id', att.id);
   att.status='submitted'; att.score=score;
   toast(auto? 'Time up — set auto-submitted' : 'Set submitted');
   S.review = { att, set, questions, showExpl:false };
@@ -506,6 +556,9 @@ function renderReviewChoice(){
     <div class="card">
       <h2>Set submitted</h2>
       <p class="muted">Score: ${S.review.att.score>0?'+':''}${S.review.att.score}</p>
+      <label style="display:flex;align-items:center;gap:8px;justify-content:center;text-transform:none;font-size:14px;color:var(--text);margin-top:10px;">
+        <input type="checkbox" id="wrongOnlyChk" style="width:auto;"> Only show wrong answers
+      </label>
       <div class="row" style="justify-content:center;margin-top:14px;">
         <button class="primary" id="rwo">Review without explanation</button>
         <button class="subtle" id="rwith">Review with explanation</button>
@@ -513,15 +566,27 @@ function renderReviewChoice(){
       </div>
     </div>
   </div>`;
-  document.getElementById('rwo').onclick=()=>renderReview(false);
-  document.getElementById('rwith').onclick=()=>renderReview(true);
+  document.getElementById('rwo').onclick=()=>renderReview(false,0,document.getElementById('wrongOnlyChk').checked);
+  document.getElementById('rwith').onclick=()=>renderReview(true,0,document.getElementById('wrongOnlyChk').checked);
   document.getElementById('backHome').onclick=()=>{ S.view='user'; renderUser(); };
 }
-async function renderReview(withExpl, i=0){
-  const { att, questions } = S.review;
+async function renderReview(withExpl, i=0, wrongOnly=false){
+  const { att, questions: allQuestions } = S.review;
+  const questions = wrongOnly
+    ? allQuestions.filter(q=>{ const a=att.answers[q.id]; return a && a.selected!=null && a.selected!==q.correct_index; })
+    : allQuestions;
+  if(!questions.length){
+    document.body.innerHTML='';
+    app.innerHTML = `<div class="container" style="max-width:480px;padding-top:14vh;text-align:center;">
+      <div class="card"><h2>No wrong answers 🎉</h2><p class="muted">Every attempted question in this set was correct.</p>
+      <button class="ghost" id="backHome2">Back to dashboard</button></div></div>`;
+    document.getElementById('backHome2').onclick=()=>{ S.view='user'; renderUser(); };
+    return;
+  }
+  i = Math.max(0, Math.min(i, questions.length-1));
   const q = questions[i]; const a = att.answers[q.id];
   const { data: existingCat } = await sb.from('categorizations').select('category').eq('user_id', S.profile.id).eq('question_id', q.id).maybeSingle();
-  app.innerHTML = `<div class="topbar"><div class="brand"><span class="dot"></span>Review ${i+1}/${questions.length}</div><button class="ghost" id="closeRev" style="padding:8px 12px;font-size:12px;">Close</button></div>
+  app.innerHTML = `<div class="topbar"><div class="brand"><span class="dot"></span>Review ${i+1}/${questions.length} ${wrongOnly?'· wrong only':''}</div><button class="ghost" id="closeRev" style="padding:8px 12px;font-size:12px;">Close</button></div>
   <div class="container">
     <div class="reviewcard" id="revCapture">
       <div class="qmeta" style="color:#555">Question ${i+1}</div>
@@ -541,15 +606,15 @@ async function renderReview(withExpl, i=0){
     return `<div class="opt ${cls}">${escapeHtml(o)}</div>`;
   }).join('');
   document.getElementById('closeRev').onclick=()=>{ S.view='user'; renderUser(); };
-  document.getElementById('pv').onclick=()=>renderReview(withExpl, i-1);
-  document.getElementById('nx').onclick=()=>renderReview(withExpl, i+1);
+  document.getElementById('pv').onclick=()=>renderReview(withExpl, i-1, wrongOnly);
+  document.getElementById('nx').onclick=()=>renderReview(withExpl, i+1, wrongOnly);
   if(!withExpl){
     const cb=document.getElementById('catbtns');
     cb.innerHTML = CATS.map(c=>`<button class="${existingCat?.category===c.key?'primary':'subtle'}" data-c="${c.key}">${c.label}</button>`).join('');
     cb.querySelectorAll('button').forEach(b=>b.onclick=async ()=>{
       await sb.from('categorizations').upsert({user_id:S.profile.id, question_id:q.id, category:b.dataset.c}, {onConflict:'user_id,question_id'});
       toast('Tagged: '+b.textContent);
-      renderReview(withExpl,i);
+      renderReview(withExpl,i,wrongOnly);
     });
   } else {
     document.getElementById('ssWith').onclick=()=>captureShot(true);
