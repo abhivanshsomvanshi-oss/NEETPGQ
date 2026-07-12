@@ -245,7 +245,7 @@ async function renderUser(){
   const adminBackBtn = S.profile?.role==='admin' ? `<button class="primary" id="backToAdminBtn" style="padding:8px 12px;font-size:12px;">← Back to Admin</button>` : '';
   app.innerHTML = topbar('QBank Console', adminBackBtn);
   bindTopbar();
-  if(document.getElementById('backToAdminBtn')) document.getElementById('backToAdminBtn').onclick = ()=>{ S.view='admin'; renderAdmin(); };
+  if(document.getElementById('backToAdminBtn')) document.getElementById('backToAdminBtn').onclick = ()=>{ S.view='admin'; S.atab='upload'; renderAdmin(); };
   const wrap = document.createElement('div'); wrap.className='container';
   app.appendChild(wrap);
 
