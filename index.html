@@ -123,7 +123,69 @@ const EXAM_CONFIG = {
   inicet:       {label:'INICET pattern',        perSet:50, minutesPerFull:45, sequential:true},
   neetpg:       {label:'NEET PG pattern',       perSet:40, minutesPerFull:42, sequential:true},
   updated_neetpg:{label:'Updated NEET PG pattern', perSet:36, minutesPerFull:42, sequential:true},
+  auto_subsection:{label:'Auto (non-subject file) — 50 q / 45 min subsections', perSet:50, minutesPerFull:45, sequential:true},
 };
+
+// The 19 NEET PG subjects, each with common short/long-form aliases used by
+// providers like BTR/Prepladder. A file/folder name is matched against these
+// (whole-word, case-insensitive) to auto-detect that it's a subject file.
+const SUBJECT_ALIASES = {
+  'Anatomy':                    ['anatomy','anat'],
+  'Physiology':                 ['physiology','physio','phys'],
+  'Biochemistry':                ['biochemistry','biochem','bioc'],
+  'Pathology':                   ['pathology','patho','path'],
+  'Pharmacology':                ['pharmacology','pharma','pharm'],
+  'Microbiology':                ['microbiology','micro'],
+  'Forensic Medicine':           ['forensicmedicine','forensic','fmt'],
+  'Community Medicine (PSM)':    ['communitymedicine','psm','sm','pmr'],
+  'ENT':                         ['ent','otorhinolaryngology'],
+  'Ophthalmology':               ['ophthalmology','ophthal','opth','eye'],
+  'Medicine':                    ['medicine','generalmedicine','gm','im'],
+  'Surgery':                     ['surgery','generalsurgery','gs'],
+  'Pediatrics':                  ['pediatrics','paediatrics','peds','pedia'],
+  'Obstetrics & Gynaecology':    ['obg','obstetrics','gynaecology','gynecology','gynae','og'],
+  'Orthopedics':                 ['orthopedics','orthopaedics','ortho'],
+  'Radiology':                   ['radiology','radiodiagnosis','radio'],
+  'Anesthesia':                  ['anesthesia','anaesthesia','anaesthesiology','anesthesiology'],
+  'Psychiatry':                  ['psychiatry','psych'],
+  'Dermatology':                 ['dermatology','derma','dvl','skin'],
+};
+function detectSubject(name){
+  const tokens = String(name||'').toLowerCase().replace(/\.(json|ndjson|txt)$/,'').split(/[^a-z0-9]+/).filter(Boolean);
+  for(const tok of tokens){
+    for(const subj in SUBJECT_ALIASES){
+      if(SUBJECT_ALIASES[subj].includes(tok)) return subj;
+    }
+  }
+  return null;
+}
+// Decides the exam pattern for an uploaded file purely from its name:
+// - matches one of the 19 subjects (short or full form) -> subject-wise
+//   (50 q / 45 min sets, last partial set gets 0.9 min/question)
+// - anything else (gt1, gt2, neetpg, inicet, ...) -> auto_subsection
+//   (50 q / 45 min sequential subsections inside one section, can't reopen
+//   a submitted/expired subsection)
+function autoDetectExamType(name){
+  const subject = detectSubject(name);
+  if(subject) return { type:'subjectwise', subject };
+  return { type:'auto_subsection', subject:null };
+}
+// Detects which "platform" (qbank) a file belongs to from its name, e.g.
+// "Prepladder_GT1.json" or "BTR Anatomy.json". Add more aliases here as
+// you bring in more source platforms.
+const PLATFORM_ALIASES = {
+  'BTR': ['btr'],
+  'Prepladder': ['prepladder'],
+};
+function detectPlatformName(name){
+  const tokens = String(name||'').toLowerCase().replace(/\.(json|ndjson|txt)$/,'').split(/[^a-z0-9]+/).filter(Boolean);
+  for(const tok of tokens){
+    for(const platform in PLATFORM_ALIASES){
+      if(PLATFORM_ALIASES[platform].includes(tok)) return platform;
+    }
+  }
+  return null;
+}
 
 let S = { session:null, profile:null, deviceId:null, view:'loading', nav:{} };
 
@@ -147,6 +209,16 @@ function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':
 // Rich text renderer: supports plain text, **bold**, line breaks, and
 // pipe tables (for "match the following" / tabular questions). Input is
 // escaped first, so this never introduces unsafe HTML.
+// Applies **bold** and inline ![alt](url) image syntax. Image syntax works
+// anywhere — question stem, each option, explanation text, and even inside
+// "match the following" table cells — so any phase/pattern (subject-wise,
+// GT, INICET, NEET PG) can carry an image wherever it's placed, just by
+// including ![](https://your-image-url) in that field's text.
+function inlineFmt(s){
+  return s
+    .replace(/!\[([^\]]*)\]\((\S+?)\)/g, '<img class="qimg" src="$2" alt="$1">')
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+}
 function renderRichText(raw){
   if(!raw) return '';
   const escaped = escapeHtml(raw);
@@ -159,7 +231,7 @@ function renderRichText(raw){
     rows.forEach((r,ri)=>{
       const cells = r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
       const tag = ri===0 ? 'th' : 'td';
-      html += '<tr>' + cells.map(c=>`<${tag}>${c}</${tag}>`).join('') + '</tr>';
+      html += '<tr>' + cells.map(c=>`<${tag}>${inlineFmt(c)}</${tag}>`).join('') + '</tr>';
     });
     html += '</table>';
     tableBuf = [];
@@ -170,7 +242,7 @@ function renderRichText(raw){
     } else if(inTable){
       flushTable(); inTable = false;
     }
-    let l = line.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    let l = inlineFmt(line);
     html += (html && !html.endsWith('</table>') ? '<br>' : '') + l;
   }
   if(inTable) flushTable();
@@ -765,7 +837,7 @@ async function adminUpload(){
   const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
   body.innerHTML = `<div class="card">
     <h3>Upload questions</h3>
-    <p class="muted">Upload a whole collection at once (multiple files) — each file becomes its own <b>section</b> inside the qbank, e.g. "Btr Anatomy", "Btr Gt-1". You'll assign each section's exam pattern separately under the "Sections" tab. Accepts JSON array or NDJSON. Each object: {"question","options":[4],"answer":0,"explanation":"","image_url":"" (optional), "folder":"" (optional — overrides filename as the section name)}.</p>
+    <p class="muted">Upload a whole collection at once (multiple files) — each file becomes its own <b>section</b> inside the qbank, e.g. "Btr Anatomy", "Btr Gt-1". The pattern is now <b>auto-detected from the file/section name</b>: any of the 19 NEET PG subjects (short or full form, e.g. "anat", "ent", "obg") auto-splits into 50 q / 45 min sets (last partial set gets 0.9 min/question). Any other name (gt1, gt2, neetpg, inicet, etc.) auto-splits into 50 q / 45 min sequential subsections — once a subsection is submitted or its 45 min runs out it locks for good. You can still override a section's pattern anytime from the "Sections" tab. Accepts JSON array or NDJSON. Each object: {"question","options":[4],"answer":0,"explanation":"","image_url":"" (optional), "folder":"" (optional — overrides filename as the section name), "subject":"" (optional — overrides auto-detected subject)}. To put an image inside an option or the explanation (e.g. "match the following" columns), just include <code>![](https://image-url)</code> anywhere in that field's text — works in question, every option, explanation, and table cells alike.</p>
     <label>QBank</label>
     <select id="qbSelect">
       <option value="__new__">+ Create new qbank</option>
@@ -792,13 +864,19 @@ async function adminUpload(){
     const files = [...document.getElementById('qbFiles').files];
     if(!files.length){ st.textContent='Choose at least one file.'; return; }
 
-    let qbankId = qbSel.value;
-    if(qbankId==='__new__'){
+    let explicitQbankId = null;
+    if(qbSel.value==='__new__'){
       const name = document.getElementById('newQbName').value.trim();
-      if(!name){ st.textContent='Give the new qbank a name.'; return; }
-      const { data: qb, error } = await sb.from('qbanks').insert({name}).select().maybeSingle();
-      if(error){ st.textContent='Error creating qbank: '+error.message; return; }
-      qbankId = qb.id;
+      if(name){
+        const { data: qb, error } = await sb.from('qbanks').insert({name}).select().maybeSingle();
+        if(error){ st.textContent='Error creating qbank: '+error.message; return; }
+        explicitQbankId = qb.id;
+      }
+      // else: leave null — each file below will auto-detect its platform
+      // (BTR / Prepladder / ...) from its own filename and route itself,
+      // reusing an existing qbank of that name instead of duplicating it.
+    } else {
+      explicitQbankId = qbSel.value;
     }
 
     let log = [];
@@ -810,10 +888,34 @@ async function adminUpload(){
       catch(e){ rows = text.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ try{return JSON.parse(l);}catch(_){return null;} }).filter(Boolean); }
       if(!rows.length){ log.push(`${file.name}: could not parse any questions — skipped.`); continue; }
 
+      // Resolve which qbank ("platform") this file belongs to.
+      let qbankId = explicitQbankId;
+      let qbankLabel = '';
+      if(!qbankId){
+        const platform = detectPlatformName(rows[0].platform || file.name);
+        if(!platform){
+          log.push(`${file.name}: no qbank selected/named, and couldn't auto-detect a platform (BTR/Prepladder) from the filename — skipped. Either pick an existing qbank, type a new qbank name, or include the platform name in the filename.`);
+          st.textContent = log.join('\n'); continue;
+        }
+        const { data: existingQb } = await sb.from('qbanks').select('*').ilike('name', platform).maybeSingle();
+        if(existingQb){ qbankId = existingQb.id; qbankLabel = existingQb.name; }
+        else {
+          const { data: newQb, error } = await sb.from('qbanks').insert({name:platform}).select().maybeSingle();
+          if(error){ log.push(`${file.name}: error creating qbank "${platform}" — ${error.message}`); continue; }
+          qbankId = newQb.id; qbankLabel = newQb.name;
+        }
+      }
+
       const folderName = rows[0].folder || prettifyName(file.name);
+      // Auto-detect pattern from the file/section name: one of the 19 NEET PG
+      // subjects (any short/full form) -> subjectwise; anything else
+      // (gt1, gt2, neetpg, inicet, ...) -> auto_subsection.
+      const detection = autoDetectExamType(rows[0].folder || file.name);
       let { data: folder } = await sb.from('folders').select('*').eq('qbank_id', qbankId).eq('name', folderName).maybeSingle();
+      let isNewFolder = false;
       if(!folder){
-        const ins = await sb.from('folders').insert({qbank_id:qbankId, name:folderName}).select().maybeSingle();
+        isNewFolder = true;
+        const ins = await sb.from('folders').insert({qbank_id:qbankId, name:folderName, exam_type:detection.type}).select().maybeSingle();
         folder = ins.data;
       }
       const { count: existingCount } = await sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', folder.id);
@@ -825,15 +927,36 @@ async function adminUpload(){
         correct_index: typeof r.answer==='number'?r.answer: typeof r.correct_index==='number'?r.correct_index: letterToIndex(r.answer||r.correct),
         explanation: r.explanation||r.expl||'',
         image_url: r.image_url||r.image||null,
-        subject: r.subject||folderName,
+        subject: r.subject || detection.subject || folderName,
         order_index: (existingCount||0) + i,
       })).filter(q=>q.q_text && q.options?.length);
       const { error: insErr } = await sb.from('questions').insert(payload);
       if(insErr){ log.push(`${file.name}: upload error — ${insErr.message}`); continue; }
-      log.push(`${file.name} → section "${folderName}": ${payload.length} questions added.`);
+
+      const patternLabel = EXAM_CONFIG[folder.exam_type]?.label || detection.type;
+      log.push(`${file.name} → ${qbankLabel?`qbank "${qbankLabel}" / `:''}section "${folderName}": ${payload.length} questions added. Pattern: ${patternLabel}${detection.subject?` (subject: ${detection.subject})`:''}.`);
       st.textContent = log.join('\n');
+
+      // Auto-generate sets right away — but only if this section has no sets
+      // yet (new folder, or an older folder that was never configured). If
+      // the section is already live with sets/attempts, we don't silently
+      // wipe them on a routine re-upload; use "Sections" tab to regenerate
+      // on purpose once you've reviewed it.
+      const { count: existingSetCount } = await sb.from('sets').select('id', {count:'exact', head:true}).eq('folder_id', folder.id).is('user_id', null);
+      if(!existingSetCount){
+        if(!folder.exam_type){
+          await sb.from('folders').update({exam_type:detection.type}).eq('id', folder.id);
+          folder.exam_type = detection.type;
+        }
+        const n = await generateSetsForFolder(folder);
+        log.push(`   ↳ auto-split into ${n} set(s).`);
+        st.textContent = log.join('\n');
+      } else {
+        log.push(`   ↳ section already has sets — go to "Sections" tab and re-generate if you want these new questions included.`);
+        st.textContent = log.join('\n');
+      }
     }
-    log.push('\nAll done. Go to "Sections" tab to assign each section its exam pattern.');
+    log.push('\nAll done. Subject-named files auto-split into 50 q / 45 min sets. Any other name (gt1, gt2, neetpg, inicet, etc.) auto-splits into 50 q / 45 min sequential subsections. You can still override a section\'s pattern from the "Sections" tab.');
     st.textContent = log.join('\n');
     document.getElementById('qbFiles').value='';
   };
@@ -858,6 +981,7 @@ async function adminFolders(){
     <label>Pattern</label>
     <select id="examTypeSel">
       <option value="subjectwise">Subject-wise (50 q / 45 min sets)</option>
+      <option value="auto_subsection">Auto pattern (50 q / 45 min subsections, sequential)</option>
       <option value="inicet">INICET pattern (4×50 q, 45 min, sequential)</option>
       <option value="neetpg">NEET PG pattern (5×40 q, 42 min, sequential)</option>
       <option value="updated_neetpg">Updated NEET PG (5×36 q, 42 min, sequential)</option>
@@ -875,25 +999,11 @@ async function adminFolders(){
     if(!ids.length){ st.textContent='Select at least one section.'; return; }
     let log=[];
     for(const folderId of ids){
-      const { data: folder } = await sb.from('folders').select('*').eq('id', folderId).maybeSingle();
+      const { data: folderRow } = await sb.from('folders').select('*').eq('id', folderId).maybeSingle();
       await sb.from('folders').update({exam_type:type}).eq('id', folderId);
-      await sb.from('sets').delete().eq('folder_id', folderId).is('user_id', null);
-      const { data: qs } = await sb.from('questions').select('*').eq('folder_id', folderId).order('order_index');
-      const cfg = EXAM_CONFIG[type];
-      let setsToInsert = [];
-      if(type==='subjectwise'){
-        const bySubject={};
-        qs.forEach(q=>{ (bySubject[q.subject||folder.name]=bySubject[q.subject||folder.name]||[]).push(q.id); });
-        for(const subj in bySubject){
-          setsToInsert = setsToInsert.concat(chunkToSets(bySubject[subj], cfg.perSet, cfg.minutesPerFull, subj));
-        }
-      } else {
-        setsToInsert = chunkToSets(qs.map(q=>q.id), cfg.perSet, cfg.minutesPerFull, null);
-      }
-      if(setsToInsert.length){
-        await sb.from('sets').insert(setsToInsert.map(s=>({...s, qbank_id:folder.qbank_id, folder_id:folderId})));
-      }
-      log.push(`${folder.name}: ${setsToInsert.length} sets generated.`);
+      const folder = {...folderRow, exam_type:type};
+      const n = await generateSetsForFolder(folder);
+      log.push(`${folder.name}: ${n} sets generated.`);
       st.textContent = log.join('\n');
     }
     st.textContent = log.join('\n') + '\n\nDone.';
@@ -923,6 +1033,31 @@ function chunkToSets(ids, perSet, fullMinutes, subject){
     out.push({set_number:setNum++, set_type:'main', subject, question_ids:chunk, duration_minutes:duration});
   }
   return out;
+}
+// Shared by the manual "Generate sets" button (Sections tab) and by the
+// auto-generation that runs right after upload. Wipes existing shared
+// (user_id is null) sets for the folder and rebuilds them from whatever
+// exam_type is currently set on the folder.
+async function generateSetsForFolder(folder){
+  const type = folder.exam_type;
+  if(!type || !EXAM_CONFIG[type]) return 0;
+  const cfg = EXAM_CONFIG[type];
+  await sb.from('sets').delete().eq('folder_id', folder.id).is('user_id', null);
+  const { data: qs } = await sb.from('questions').select('*').eq('folder_id', folder.id).order('order_index');
+  let setsToInsert = [];
+  if(type==='subjectwise'){
+    const bySubject={};
+    (qs||[]).forEach(q=>{ (bySubject[q.subject||folder.name]=bySubject[q.subject||folder.name]||[]).push(q.id); });
+    for(const subj in bySubject){
+      setsToInsert = setsToInsert.concat(chunkToSets(bySubject[subj], cfg.perSet, cfg.minutesPerFull, subj));
+    }
+  } else {
+    setsToInsert = chunkToSets((qs||[]).map(q=>q.id), cfg.perSet, cfg.minutesPerFull, null);
+  }
+  if(setsToInsert.length){
+    await sb.from('sets').insert(setsToInsert.map(s=>({...s, qbank_id:folder.qbank_id, folder_id:folder.id})));
+  }
+  return setsToInsert.length;
 }
 
 async function adminUsers(){
