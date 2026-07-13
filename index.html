@@ -42,13 +42,16 @@ label{font-size:12px;color:var(--text-dim);display:block;margin:10px 0 5px;text-
 .badge.active{background:#16321f;color:var(--green);}
 .badge.pending{background:#332a12;color:var(--amber);}
 .badge.revoked{background:#3a1417;color:var(--red);}
+.badge.unset{background:#3a2a12;color:var(--text-dim);}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
 .muted{color:var(--text-dim);font-size:13px;}
 .tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto;}
 .tab{padding:10px 14px;font-size:13px;font-weight:600;color:var(--text-dim);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer;}
 .tab.on{color:var(--amber);border-color:var(--amber);}
-.qrow{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--surface-2);border-radius:10px;margin-bottom:8px;}
+.crumbs{font-size:12px;color:var(--text-dim);margin-bottom:12px;}
+.crumbs span{cursor:pointer;color:var(--amber);}
+.qrow{display:flex;justify-content:space-between;align-items:center;padding:14px;background:var(--surface-2);border-radius:10px;margin-bottom:8px;cursor:pointer;}
 .lockicon{opacity:.5;}
 .exam-shell{display:grid;grid-template-columns:1fr 260px;gap:0;flex:1;}
 @media(max-width:760px){.exam-shell{grid-template-columns:1fr;}}
@@ -78,6 +81,10 @@ label{font-size:12px;color:var(--text-dim);display:block;margin:10px 0 5px;text-
 .overlay{position:fixed;inset:0;background:rgba(11,18,32,.85);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;max-width:440px;width:100%;max-height:86vh;overflow-y:auto;}
 .locked-banner{background:linear-gradient(120deg,#332a12,#241d0d);border:1px solid var(--amber-dim);border-radius:var(--radius);padding:18px;margin-bottom:16px;}
+table.rt{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0;}
+table.rt th,table.rt td{text-align:left;padding:8px 6px;border:1px solid var(--border);}
+table.rt th{color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;}
+.reviewcard table.rt th,.reviewcard table.rt td{border-color:#d6d3c6;}
 table{width:100%;border-collapse:collapse;font-size:13px;}
 th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);}
 th{color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;}
@@ -87,6 +94,8 @@ th{color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase
 .qmeta{font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-bottom:6px;}
 .stat-big{font-family:var(--mono);font-size:30px;font-weight:600;}
 .divider{height:1px;background:var(--border);margin:16px 0;}
+.qimg{max-width:100%;border-radius:10px;margin:10px 0;display:block;}
+.filepick{border:1px dashed var(--border);border-radius:10px;padding:14px;margin-top:6px;}
 </style>
 </head>
 <body>
@@ -98,6 +107,7 @@ const SUPABASE_URL = 'https://vjqhgxjnzjxqvralcvqq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqcWhneGpuemp4cXZyYWxjdnFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NjQ1NjQsImV4cCI6MjA5OTM0MDU2NH0.KnYldvE-fH9Rbc5Px3tZ6BjQLhcMDI-Vmg6QX9XPILk';
 const ADMIN_EMAIL = 'goluvansh@qbank.com';
 const TELEGRAM_BOT = 'https://t.me/Neetpgqbank_bot';
+const GIFT_CARD_LINK = 'https://amzn.in/d/03DG6r66';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const app = document.getElementById('app');
@@ -115,7 +125,7 @@ const EXAM_CONFIG = {
   updated_neetpg:{label:'Updated NEET PG pattern', perSet:36, minutesPerFull:42, sequential:true},
 };
 
-let S = { session:null, profile:null, deviceId:null, view:'loading', data:{} };
+let S = { session:null, profile:null, deviceId:null, view:'loading', nav:{} };
 
 function toast(msg){
   const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
@@ -132,6 +142,46 @@ function fmtTime(sec){
   return (h>0?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
 }
 function statusOf(a){ return a ? a.status : 'not_visited'; }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Rich text renderer: supports plain text, **bold**, line breaks, and
+// pipe tables (for "match the following" / tabular questions). Input is
+// escaped first, so this never introduces unsafe HTML.
+function renderRichText(raw){
+  if(!raw) return '';
+  const escaped = escapeHtml(raw);
+  const lines = escaped.split(/\n/);
+  let html = '', tableBuf = [], inTable = false;
+  const flushTable = ()=>{
+    if(!tableBuf.length) return;
+    const rows = tableBuf.filter(r=>!/^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(r));
+    html += '<table class="rt">';
+    rows.forEach((r,ri)=>{
+      const cells = r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+      const tag = ri===0 ? 'th' : 'td';
+      html += '<tr>' + cells.map(c=>`<${tag}>${c}</${tag}>`).join('') + '</tr>';
+    });
+    html += '</table>';
+    tableBuf = [];
+  };
+  for(const line of lines){
+    if(/^\s*\|.*\|\s*$/.test(line)){
+      inTable = true; tableBuf.push(line); continue;
+    } else if(inTable){
+      flushTable(); inTable = false;
+    }
+    let l = line.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    html += (html && !html.endsWith('</table>') ? '<br>' : '') + l;
+  }
+  if(inTable) flushTable();
+  return html;
+}
+function richBlock(raw, imageUrl){
+  let html = '';
+  if(imageUrl) html += `<img class="qimg" src="${escapeHtml(imageUrl)}" alt="question image">`;
+  html += `<div>${renderRichText(raw)}</div>`;
+  return html;
+}
 
 // ---------- boot ----------
 async function boot(){
@@ -145,7 +195,7 @@ async function boot(){
 async function loadProfile(){
   const email = S.session.user.email;
   const isAdminEmail = email === ADMIN_EMAIL;
-  let { data, error } = await sb.from('profiles').select('*').eq('id', S.session.user.id).maybeSingle();
+  let { data } = await sb.from('profiles').select('*').eq('id', S.session.user.id).maybeSingle();
   if(!data){
     const ins = await sb.from('profiles').upsert({
       id:S.session.user.id, email,
@@ -154,8 +204,6 @@ async function loadProfile(){
     }, {onConflict:'id'}).select().maybeSingle();
     data = ins.data;
   }
-  // self-heal: the admin email must always carry admin role + active status,
-  // even if an earlier signup/insert race left it out of sync
   if(isAdminEmail && data && (data.role!=='admin' || data.status!=='active')){
     const upd = await sb.from('profiles').update({role:'admin', status:'active'}).eq('id', S.session.user.id).select().maybeSingle();
     if(upd.data) data = upd.data;
@@ -257,59 +305,110 @@ async function renderUser(){
     <div class="tab ${S.utab==='decks'?'on':''}" data-t="decks">Category decks</div>
     <div class="tab ${S.utab==='sub'?'on':''}" data-t="sub">Subscription</div>
   </div><div id="utabBody"></div>`;
-  wrap.querySelectorAll('.tab[data-t]').forEach(t=>t.onclick=()=>{S.utab=t.dataset.t; renderUser();});
+  wrap.querySelectorAll('.tab[data-t]').forEach(t=>t.onclick=()=>{S.utab=t.dataset.t; S.nav={}; renderUser();});
 
   if(!isActive){
     document.getElementById('utabBody').innerHTML = `<div class="locked-banner"><h3>🔒 Subscription ${S.profile.status==='pending'?'pending activation':'inactive'}</h3>
-      <p class="muted">Your account is created but not yet activated. Pay via the plan below, send a screenshot to the Telegram bot, and the admin will activate your access.</p>
-      <div class="row" style="margin-top:10px;"><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Pay on Telegram</button></a></div></div>`;
+      <p class="muted">Buy a gift card of the plan you want and send it to the bot below. Admin will activate your access.</p>
+      <div class="row" style="margin-top:10px;"><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Send screenshot on Telegram</button></a></div></div>`;
   }
 
-  if(S.utab==='qbanks') return loadQbanksTab(isActive);
+  if(S.utab==='qbanks') return loadQbanksNav(isActive);
   if(S.utab==='stats') return loadStatsTab();
   if(S.utab==='decks') return loadDecksTab();
   if(S.utab==='sub') return loadSubTab();
 }
 
-async function loadQbanksTab(isActive){
-  const body=document.getElementById('utabBody');
-  body.innerHTML += `<div class="spinner"></div>`;
-  const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
-  let html = '';
-  for(const qb of (qbanks||[])){
-    const { data: sets } = await sb.from('sets').select('*').eq('qbank_id', qb.id).is('user_id', null).order('subject').order('set_number');
-    if(!sets || !sets.length){ continue; }
-    html += `<div class="card"><h3>${qb.name} <span class="badge active" style="background:var(--surface-2);color:var(--text-dim);">${EXAM_CONFIG[qb.exam_type]?.label||qb.exam_type}</span></h3>`;
-    if(qb.exam_type==='subjectwise'){
-      const bySubject={};
-      sets.forEach(s=>{ (bySubject[s.subject||'General']=bySubject[s.subject||'General']||[]).push(s); });
-      for(const subj in bySubject){
-        html += `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${subj}</div>`;
-        for(const s of bySubject[subj]){
-          html += await setRow(s, isActive);
-        }
-      }
-    } else {
-      let allDone = true;
-      for(const s of sets){
-        const locked = EXAM_CONFIG[qb.exam_type].sequential && s.set_number>1 ? await isLocked(qb.id, s.set_number) : false;
-        html += await setRow(s, isActive, locked);
-        const { data: doneAtt } = await sb.from('attempts').select('id').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').maybeSingle();
-        if(!doneAtt) allDone = false;
-      }
-      if(allDone){
-        html += `<div class="row" style="margin-top:8px;"><button class="subtle" data-fulltest="${qb.id}">📊 Review full test (all sections)</button></div>`;
-      }
-    }
-    html += `</div>`;
-  }
-  if(!html) html = `<div class="card muted">No qbanks published yet.</div>`;
-  body.innerHTML = body.innerHTML.replace('<div class="spinner"></div>','') ;
-  document.getElementById('utabBody').innerHTML = document.getElementById('utabBody').innerHTML.split('<div class="spinner"></div>')[0] + html;
-  wireSetRows(isActive);
+// ---- QBank -> Folder -> Sets navigation ----
+function crumbBar(items){
+  // items: [{label, onClick}]
+  return `<div class="crumbs">` + items.map((it,i)=>{
+    const sep = i>0 ? ' / ' : '';
+    return sep + (it.onClick ? `<span data-crumb="${i}">${it.label}</span>` : it.label);
+  }).join('') + `</div>`;
 }
-async function isLocked(qbankId, setNumber){
-  const { data: prevSet } = await sb.from('sets').select('id').eq('qbank_id', qbankId).is('user_id', null).eq('set_number', setNumber-1).eq('set_type','main').maybeSingle();
+async function loadQbanksNav(isActive){
+  if(!S.nav.qbankId){ return loadQbankList(isActive); }
+  if(!S.nav.folderId){ return loadFolderList(isActive); }
+  return loadFolderSets(isActive);
+}
+async function loadQbankList(isActive){
+  const body=document.getElementById('utabBody');
+  const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
+  if(!qbanks || !qbanks.length){ body.innerHTML += `<div class="card muted">No qbanks published yet.</div>`; return; }
+  let html = '<div class="grid">';
+  for(const qb of qbanks){
+    const { count } = await sb.from('folders').select('id', {count:'exact', head:true}).eq('qbank_id', qb.id);
+    html += `<div class="card" style="cursor:pointer;" data-qb="${qb.id}"><h3>${qb.name}</h3><div class="muted">${count||0} sections</div></div>`;
+  }
+  html += '</div>';
+  body.innerHTML += html;
+  body.querySelectorAll('[data-qb]').forEach(el=>el.onclick=()=>{ S.nav={qbankId: el.dataset.qb}; renderUser(); });
+}
+async function loadFolderList(isActive){
+  const body=document.getElementById('utabBody');
+  const { data: qb } = await sb.from('qbanks').select('*').eq('id', S.nav.qbankId).maybeSingle();
+  body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank'}]);
+  const { data: folders } = await sb.from('folders').select('*').eq('qbank_id', S.nav.qbankId).order('name');
+  let html = '';
+  for(const f of (folders||[])){
+    const { count } = await sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', f.id);
+    const cfg = EXAM_CONFIG[f.exam_type];
+    html += `<div class="qrow" data-folder="${f.id}">
+      <div><b>${f.name}</b> · ${count||0} questions</div>
+      <span class="badge ${cfg?'active':'unset'}">${cfg?cfg.label:'Not configured'}</span>
+    </div>`;
+  }
+  if(!html) html = `<div class="card muted">No sections in this qbank yet.</div>`;
+  document.getElementById('utabBody').innerHTML += html;
+  const crumb = document.querySelector('[data-crumb="0"]');
+  if(crumb) crumb.onclick = ()=>{ S.nav={}; renderUser(); };
+  document.querySelectorAll('[data-folder]').forEach(el=>{
+    el.onclick = async ()=>{
+      const fid = el.dataset.folder;
+      const { data: f } = await sb.from('folders').select('*').eq('id', fid).maybeSingle();
+      if(!f.exam_type){ toast('Admin has not configured this section yet'); return; }
+      S.nav.folderId = fid; renderUser();
+    };
+  });
+}
+async function loadFolderSets(isActive){
+  const body=document.getElementById('utabBody');
+  const { data: qb } = await sb.from('qbanks').select('*').eq('id', S.nav.qbankId).maybeSingle();
+  const { data: folder } = await sb.from('folders').select('*').eq('id', S.nav.folderId).maybeSingle();
+  body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank', onClick:true},{label:folder?.name||'Section'}]);
+  document.querySelector('[data-crumb="0"]').onclick = ()=>{ S.nav={}; renderUser(); };
+  document.querySelector('[data-crumb="1"]').onclick = ()=>{ S.nav={qbankId:S.nav.qbankId}; renderUser(); };
+
+  const { data: sets } = await sb.from('sets').select('*').eq('folder_id', folder.id).is('user_id', null).order('subject').order('set_number');
+  let html = '';
+  if(!sets || !sets.length){ html = `<div class="card muted">No sets generated for this section yet.</div>`; }
+  else if(folder.exam_type==='subjectwise'){
+    const bySubject={};
+    sets.forEach(s=>{ (bySubject[s.subject||'General']=bySubject[s.subject||'General']||[]).push(s); });
+    for(const subj in bySubject){
+      html += `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${subj}</div>`;
+      for(const s of bySubject[subj]) html += await setRow(s, isActive);
+    }
+  } else {
+    let allDone = true;
+    for(const s of sets){
+      const locked = EXAM_CONFIG[folder.exam_type].sequential && s.set_number>1 ? await isLocked(folder.id, s.set_number) : false;
+      html += await setRow(s, isActive, locked);
+      const { data: doneAtt } = await sb.from('attempts').select('id').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').maybeSingle();
+      if(!doneAtt) allDone = false;
+    }
+    if(allDone && sets.length){
+      html += `<div class="row" style="margin-top:8px;"><button class="subtle" id="fullTestBtn">📊 Review full test (all sections)</button></div>`;
+    }
+  }
+  document.getElementById('utabBody').innerHTML += html;
+  wireSetRows();
+  const ftBtn = document.getElementById('fullTestBtn');
+  if(ftBtn) ftBtn.onclick = ()=> loadFullTestReview(folder.id);
+}
+async function isLocked(folderId, setNumber){
+  const { data: prevSet } = await sb.from('sets').select('id').eq('folder_id', folderId).is('user_id', null).eq('set_number', setNumber-1).eq('set_type','main').maybeSingle();
   if(!prevSet) return false;
   const { data: att } = await sb.from('attempts').select('status').eq('user_id', S.profile.id).eq('set_id', prevSet.id).eq('status','submitted').maybeSingle();
   return !att;
@@ -327,7 +426,7 @@ async function setRow(s, isActive, locked=false){
       ${row && row.rank ? ` · rank ${row.rank}/${row.total_attempts} · ${row.percentile}ᵗʰ percentile` : ''}
     </div>`;
   }
-  return `<div class="qrow" style="flex-direction:column;align-items:stretch;gap:6px;">
+  return `<div class="qrow" style="flex-direction:column;align-items:stretch;gap:6px;cursor:default;">
     <div class="row" style="justify-content:space-between;">
       <div><b>Set ${s.set_number}</b> · ${n} questions · ${s.duration_minutes} min ${locked?'<span class="lockicon">🔒</span>':''}</div>
       <button class="${isActive&&!locked?'primary':'ghost'}" data-startset="${s.id}" ${(!isActive||locked)?'disabled':''}>${!isActive?'Locked':locked?'Complete previous':att?'Retake':'Start'}</button>
@@ -339,12 +438,9 @@ function wireSetRows(){
   document.querySelectorAll('[data-startset]').forEach(b=>{
     b.onclick = ()=> startAttempt(b.dataset.startset);
   });
-  document.querySelectorAll('[data-fulltest]').forEach(b=>{
-    b.onclick = ()=> loadFullTestReview(b.dataset.fulltest);
-  });
 }
-async function loadFullTestReview(qbankId){
-  const { data: sets } = await sb.from('sets').select('*').eq('qbank_id', qbankId).is('user_id', null).eq('set_type','main').order('set_number');
+async function loadFullTestReview(folderId){
+  const { data: sets } = await sb.from('sets').select('*').eq('folder_id', folderId).is('user_id', null).eq('set_type','main').order('set_number');
   let allQuestions = [], mergedAnswers = {}, totalScore = 0, totalCorrect = 0, totalQ = 0;
   for(const s of sets){
     const { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').order('submitted_at',{ascending:false}).limit(1).maybeSingle();
@@ -363,19 +459,12 @@ async function loadFullTestReview(qbankId){
 async function loadStatsTab(){
   const body=document.getElementById('utabBody');
   const start = new Date(); start.setHours(0,0,0,0);
-  const { data: attempts } = await sb.from('attempts').select('*, sets(question_ids)').eq('user_id', S.profile.id).eq('status','submitted').gte('submitted_at', start.toISOString());
-  let total=0, correct=0, wrong=0;
-  for(const a of (attempts||[])){
-    for(const qid in (a.answers||{})){
-      const ans=a.answers[qid];
-      if(ans.status==='answered'||ans.status==='answered_marked'){ total++; }
-    }
-  }
-  // fetch correctness lazily
-  let corrCount=0, wrongCount=0;
+  const { data: attempts } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('status','submitted').gte('submitted_at', start.toISOString());
+  let total=0, corrCount=0, wrongCount=0;
   for(const a of (attempts||[])){
     const qids=Object.keys(a.answers||{}).filter(k=>['answered','answered_marked'].includes(a.answers[k].status));
     if(!qids.length) continue;
+    total += qids.length;
     const { data: qs } = await sb.from('questions').select('id, correct_index').in('id', qids);
     qs.forEach(q=>{ const sel=a.answers[q.id].selected; if(sel===q.correct_index) corrCount++; else wrongCount++; });
   }
@@ -389,19 +478,19 @@ async function loadStatsTab(){
 
 async function loadDecksTab(){
   const body=document.getElementById('utabBody');
-  const { data: cats } = await sb.from('categorizations').select('*, questions(qbank_id)').eq('user_id', S.profile.id);
+  const { data: cats } = await sb.from('categorizations').select('*, questions(folder_id)').eq('user_id', S.profile.id);
   if(!cats || !cats.length){ body.innerHTML += `<div class="card muted">No tagged questions yet. Categorise wrong answers during review to build decks here.</div>`; return; }
-  const byQbank={};
-  cats.forEach(c=>{ const qb=c.questions.qbank_id; byQbank[qb]=byQbank[qb]||{}; (byQbank[qb][c.category]=byQbank[qb][c.category]||[]).push(c.question_id); });
+  const byFolder={};
+  cats.forEach(c=>{ const fid=c.questions.folder_id; byFolder[fid]=byFolder[fid]||{}; (byFolder[fid][c.category]=byFolder[fid][c.category]||[]).push(c.question_id); });
   let html='';
-  for(const qbId in byQbank){
-    const { data: qb } = await sb.from('qbanks').select('name').eq('id', qbId).maybeSingle();
-    html += `<div class="card"><h3>${qb?.name||'QBank'}</h3>`;
+  for(const fid in byFolder){
+    const { data: folder } = await sb.from('folders').select('name').eq('id', fid).maybeSingle();
+    html += `<div class="card"><h3>${folder?.name||'Section'}</h3>`;
     for(const cat of CATS){
-      const ids = byQbank[qbId][cat.key];
+      const ids = byFolder[fid][cat.key];
       if(!ids || !ids.length) continue;
       const dur = Math.round(ids.length*0.9*10)/10;
-      html += `<div class="qrow"><div><b>${cat.label}</b> · ${ids.length} q · ${dur} min</div><button class="primary" data-deck='${qbId}|${cat.key}'>Start</button></div>`;
+      html += `<div class="qrow" style="cursor:default;"><div><b>${cat.label}</b> · ${ids.length} q · ${dur} min</div><button class="primary" data-deck='${fid}|${cat.key}'>Start</button></div>`;
     }
     html += `</div>`;
   }
@@ -410,20 +499,21 @@ async function loadDecksTab(){
     b.onclick = ()=> startCategoryDeck(...b.dataset.deck.split('|'));
   });
 }
-async function startCategoryDeck(qbankId, category){
-  const { data: cats } = await sb.from('categorizations').select('question_id, questions!inner(qbank_id)').eq('user_id', S.profile.id).eq('category', category).eq('questions.qbank_id', qbankId);
+async function startCategoryDeck(folderId, category){
+  const { data: cats } = await sb.from('categorizations').select('question_id, questions!inner(folder_id, qbank_id)').eq('user_id', S.profile.id).eq('category', category).eq('questions.folder_id', folderId);
   const ids = cats.map(c=>c.question_id);
+  const qbankId = cats[0]?.questions?.qbank_id;
   const dur = Math.round(ids.length*0.9*10)/10;
-  const { data: existing } = await sb.from('sets').select('*').eq('qbank_id', qbankId).eq('user_id', S.profile.id).eq('category', category).maybeSingle();
-  let setRow = existing;
+  const { data: existing } = await sb.from('sets').select('*').eq('folder_id', folderId).eq('user_id', S.profile.id).eq('category', category).maybeSingle();
+  let setRowData = existing;
   if(existing){
     const upd = await sb.from('sets').update({question_ids:ids, duration_minutes:dur}).eq('id', existing.id).select().maybeSingle();
-    setRow = upd.data;
+    setRowData = upd.data;
   } else {
-    const ins = await sb.from('sets').insert({qbank_id:qbankId, user_id:S.profile.id, set_type:'category', category, question_ids:ids, duration_minutes:dur, set_number:1}).select().maybeSingle();
-    setRow = ins.data;
+    const ins = await sb.from('sets').insert({qbank_id:qbankId, folder_id:folderId, user_id:S.profile.id, set_type:'category', category, question_ids:ids, duration_minutes:dur, set_number:1}).select().maybeSingle();
+    setRowData = ins.data;
   }
-  startAttempt(setRow.id);
+  startAttempt(setRowData.id);
 }
 
 async function loadSubTab(){
@@ -435,15 +525,16 @@ async function loadSubTab(){
     <p class="muted">Devices allowed: ${S.profile.device_limit}</p>
   </div><div class="grid">`;
   (plans||[]).forEach(p=>{
-    html += `<div class="card"><h3>${p.name}</h3><div class="stat-big">₹${p.price}</div><div class="muted">${p.duration_days} days</div></div>`;
+    html += `<div class="card"><h3>${p.name}</h3><div class="stat-big">₹${p.price}</div><div class="muted">${p.duration_days} days</div>
+      <a href="${GIFT_CARD_LINK}" target="_blank"><button class="primary" style="width:100%;margin-top:12px;">Buy ₹${p.price} gift card</button></a></div>`;
   });
-  html += `</div><div class="card"><p>Pay for a plan, then send the payment screenshot to the bot below. Admin will activate your account.</p><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Open Telegram bot</button></a></div>`;
+  html += `</div><div class="card"><p>Buy a gift card of the plan you want and send it to the bot below. Admin will activate your account.</p><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Open Telegram bot</button></a></div>`;
   body.innerHTML += html;
 }
 
 // ================= EXAM PLAYER =================
 async function startAttempt(setId){
-  const { data: set } = await sb.from('sets').select('*, qbanks(exam_type)').eq('id', setId).maybeSingle();
+  const { data: set } = await sb.from('sets').select('*').eq('id', setId).maybeSingle();
   let { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', setId).eq('status','in_progress').maybeSingle();
   const { data: questions } = await sb.from('questions').select('*').in('id', set.question_ids);
   const ordered = set.question_ids.map(id=>questions.find(q=>q.id===id)).filter(Boolean);
@@ -479,7 +570,7 @@ function renderExam(){
   <div class="exam-shell">
     <div class="exam-main">
       <div class="qmeta">Question ${idx+1} of ${questions.length}</div>
-      <h2 style="font-family:var(--body);font-weight:600;font-size:17px;line-height:1.5;">${escapeHtml(q.q_text)}</h2>
+      <div style="font-weight:600;font-size:16px;line-height:1.5;">${richBlock(q.q_text, q.image_url)}</div>
       <div id="opts"></div>
       <div class="row" style="margin-top:16px;">
         <button class="subtle" id="prevQ" ${idx===0?'disabled':''}>◀ Prev</button>
@@ -515,7 +606,7 @@ function renderOpts(){
   const { att, questions, idx } = S.exam;
   const q=questions[idx]; const a=att.answers[q.id];
   const el=document.getElementById('opts');
-  el.innerHTML = q.options.map((o,i)=>`<div class="opt ${a.selected===i?'sel':''}" data-i="${i}">${escapeHtml(o)}</div>`).join('');
+  el.innerHTML = q.options.map((o,i)=>`<div class="opt ${a.selected===i?'sel':''}" data-i="${i}">${renderRichText(o)}</div>`).join('');
   el.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{
     const i=+o.dataset.i;
     a.selected=i; a.status = ['marked','answered_marked'].includes(a.status)?'answered_marked':'answered';
@@ -568,7 +659,7 @@ function renderReviewChoice(){
   </div>`;
   document.getElementById('rwo').onclick=()=>renderReview(false,0,document.getElementById('wrongOnlyChk').checked);
   document.getElementById('rwith').onclick=()=>renderReview(true,0,document.getElementById('wrongOnlyChk').checked);
-  document.getElementById('backHome').onclick=()=>{ S.view='user'; renderUser(); };
+  document.getElementById('backHome').onclick=()=>{ S.view='user'; S.nav={}; renderUser(); };
 }
 async function renderReview(withExpl, i=0, wrongOnly=false){
   const { att, questions: allQuestions } = S.review;
@@ -576,11 +667,10 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
     ? allQuestions.filter(q=>{ const a=att.answers[q.id]; return a && a.selected!=null && a.selected!==q.correct_index; })
     : allQuestions;
   if(!questions.length){
-    document.body.innerHTML='';
     app.innerHTML = `<div class="container" style="max-width:480px;padding-top:14vh;text-align:center;">
       <div class="card"><h2>No wrong answers 🎉</h2><p class="muted">Every attempted question in this set was correct.</p>
       <button class="ghost" id="backHome2">Back to dashboard</button></div></div>`;
-    document.getElementById('backHome2').onclick=()=>{ S.view='user'; renderUser(); };
+    document.getElementById('backHome2').onclick=()=>{ S.view='user'; S.nav={}; renderUser(); };
     return;
   }
   i = Math.max(0, Math.min(i, questions.length-1));
@@ -590,9 +680,9 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
   <div class="container">
     <div class="reviewcard" id="revCapture">
       <div class="qmeta" style="color:#555">Question ${i+1}</div>
-      <h3 style="font-family:var(--body);">${escapeHtml(q.q_text)}</h3>
+      <div style="font-weight:600;">${richBlock(q.q_text, q.image_url)}</div>
       <div id="revOpts"></div>
-      ${withExpl?`<div class="divider"></div><div><b>Explanation</b><p>${escapeHtml(q.explanation||'No explanation provided.')}</p></div>`:''}
+      ${withExpl?`<div class="divider"></div><div><b>Explanation</b>${renderRichText(q.explanation||'No explanation provided.')}</div>`:''}
     </div>
     ${withExpl?`<div class="row"><button class="subtle" id="ssWith">📸 Save screenshot (with explanation)</button><button class="subtle" id="ssWithout">📸 Save screenshot (without explanation)</button></div>`
       :`<div class="card"><div class="muted" style="margin-bottom:6px;">Why did this go wrong?</div><div class="catbtns" id="catbtns"></div></div>`}
@@ -603,9 +693,9 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
     let cls='';
     if(idx===q.correct_index) cls='correct';
     else if(a.selected===idx) cls='wrong';
-    return `<div class="opt ${cls}">${escapeHtml(o)}</div>`;
+    return `<div class="opt ${cls}">${renderRichText(o)}</div>`;
   }).join('');
-  document.getElementById('closeRev').onclick=()=>{ S.view='user'; renderUser(); };
+  document.getElementById('closeRev').onclick=()=>{ S.view='user'; S.nav={}; renderUser(); };
   document.getElementById('pv').onclick=()=>renderReview(withExpl, i-1, wrongOnly);
   document.getElementById('nx').onclick=()=>renderReview(withExpl, i+1, wrongOnly);
   if(!withExpl){
@@ -635,7 +725,6 @@ async function captureShot(withExpl){
   link.click();
   toast('Image saved to downloads');
 }
-function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // override render() to route to exam view
 const _origRender = render;
@@ -652,58 +741,101 @@ async function renderAdmin(){
   const wrap=document.createElement('div'); wrap.className='container'; app.appendChild(wrap);
   wrap.innerHTML = `<div class="tabs">
     <div class="tab ${S.atab==='upload'?'on':''}" data-t="upload">Upload</div>
-    <div class="tab ${S.atab==='qbanks'?'on':''}" data-t="qbanks">Manage QBanks</div>
+    <div class="tab ${S.atab==='folders'?'on':''}" data-t="folders">Sections</div>
     <div class="tab ${S.atab==='users'?'on':''}" data-t="users">Users</div>
     <div class="tab ${S.atab==='plans'?'on':''}" data-t="plans">Plans</div>
     <div class="tab ${S.atab==='attempt'?'on':''}" data-t="attempt">Practice (user view)</div>
   </div><div id="atabBody"></div>`;
   wrap.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{S.atab=t.dataset.t; renderAdmin();});
   if(S.atab==='upload') return adminUpload();
-  if(S.atab==='qbanks') return adminQbanks();
+  if(S.atab==='folders') return adminFolders();
   if(S.atab==='users') return adminUsers();
   if(S.atab==='plans') return adminPlans();
-  if(S.atab==='attempt'){ S.view='user'; return renderUser(); }
+  if(S.atab==='attempt'){ S.view='user'; S.nav={}; return renderUser(); }
 }
 
-function adminUpload(){
+function prettifyName(filename){
+  let n = filename.replace(/\.(ndjson|json|txt)$/i,'');
+  n = n.replace(/[_-]+/g,' ').trim();
+  return n.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
+async function adminUpload(){
   const body=document.getElementById('atabBody');
+  const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
   body.innerHTML = `<div class="card">
     <h3>Upload questions</h3>
-    <p class="muted">Accepts a JSON array or NDJSON (one object per line). Each object: {"question","options":[4],"answer":0,"explanation":"","subject":""}. "answer" is the 0-based index of the correct option.</p>
-    <label>QBank name</label><input id="qbName" placeholder="e.g. BTR Batch 2026">
-    <label>File (.json / .ndjson)</label><input id="qbFile" type="file" accept=".json,.ndjson,.txt">
+    <p class="muted">Upload a whole collection at once (multiple files) — each file becomes its own <b>section</b> inside the qbank, e.g. "Btr Anatomy", "Btr Gt-1". You'll assign each section's exam pattern separately under the "Sections" tab. Accepts JSON array or NDJSON. Each object: {"question","options":[4],"answer":0,"explanation":"","image_url":"" (optional), "folder":"" (optional — overrides filename as the section name)}.</p>
+    <label>QBank</label>
+    <select id="qbSelect">
+      <option value="__new__">+ Create new qbank</option>
+      ${(qbanks||[]).map(qb=>`<option value="${qb.id}">${qb.name}</option>`).join('')}
+    </select>
+    <div id="newQbWrap" style="margin-top:8px;">
+      <label>New qbank name</label><input id="newQbName" placeholder="e.g. BTR Collection">
+    </div>
+    <label>Files (.json / .ndjson) — select multiple</label>
+    <input id="qbFiles" type="file" accept=".json,.ndjson,.txt" multiple>
     <button class="primary" id="qbUpload" style="margin-top:14px;">Parse & upload</button>
-    <div id="upStatus" class="muted" style="margin-top:10px;"></div>
+    <div id="upStatus" class="muted" style="margin-top:10px; white-space:pre-line;"></div>
   </div>
   <div class="card"><h3>Telegram payments</h3><p class="muted">Payment screenshots are sent to the bot below; open it to view them and then activate the matching user under the Users tab.</p><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Open @Neetpgqbank_bot</button></a></div>`;
+
+  const qbSel = document.getElementById('qbSelect');
+  const newWrap = document.getElementById('newQbWrap');
+  const syncNewWrap = ()=>{ newWrap.style.display = qbSel.value==='__new__' ? 'block' : 'none'; };
+  syncNewWrap();
+  qbSel.onchange = syncNewWrap;
+
   document.getElementById('qbUpload').onclick = async ()=>{
-    const name=document.getElementById('qbName').value.trim();
-    const file=document.getElementById('qbFile').files[0];
     const st=document.getElementById('upStatus');
-    if(!name||!file){ st.textContent='Give a name and choose a file.'; return; }
-    st.textContent='Reading file…';
-    const text = await file.text();
-    let rows=[];
-    try{ const parsed=JSON.parse(text); rows = Array.isArray(parsed)?parsed:[parsed]; }
-    catch(e){ rows = text.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ try{return JSON.parse(l);}catch(_){return null;} }).filter(Boolean); }
-    if(!rows.length){ st.textContent='Could not parse any questions from this file.'; return; }
-    st.textContent='Creating qbank…';
-    const { data: qb, error: qbErr } = await sb.from('qbanks').insert({name, exam_type:'subjectwise'}).select().maybeSingle();
-    if(qbErr){ st.textContent='Error: '+qbErr.message; return; }
-    st.textContent=`Uploading ${rows.length} questions…`;
-    const payload = rows.map((r,i)=>({
-      qbank_id: qb.id,
-      q_text: r.question||r.q_text||r.q||'',
-      options: r.options||r.opts||[],
-      correct_index: typeof r.answer==='number'?r.answer: typeof r.correct_index==='number'?r.correct_index: letterToIndex(r.answer||r.correct),
-      explanation: r.explanation||r.expl||'',
-      subject: r.subject||null,
-      order_index: i,
-    })).filter(q=>q.q_text && q.options?.length);
-    const { error: insErr } = await sb.from('questions').insert(payload);
-    if(insErr){ st.textContent='Upload error: '+insErr.message; return; }
-    st.textContent=`Done — ${payload.length} questions added to "${name}". Assign its exam type under "Manage QBanks".`;
-    document.getElementById('qbName').value=''; document.getElementById('qbFile').value='';
+    const files = [...document.getElementById('qbFiles').files];
+    if(!files.length){ st.textContent='Choose at least one file.'; return; }
+
+    let qbankId = qbSel.value;
+    if(qbankId==='__new__'){
+      const name = document.getElementById('newQbName').value.trim();
+      if(!name){ st.textContent='Give the new qbank a name.'; return; }
+      const { data: qb, error } = await sb.from('qbanks').insert({name}).select().maybeSingle();
+      if(error){ st.textContent='Error creating qbank: '+error.message; return; }
+      qbankId = qb.id;
+    }
+
+    let log = [];
+    for(const file of files){
+      st.textContent = log.join('\n') + `\nReading ${file.name}…`;
+      const text = await file.text();
+      let rows=[];
+      try{ const parsed=JSON.parse(text); rows = Array.isArray(parsed)?parsed:[parsed]; }
+      catch(e){ rows = text.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ try{return JSON.parse(l);}catch(_){return null;} }).filter(Boolean); }
+      if(!rows.length){ log.push(`${file.name}: could not parse any questions — skipped.`); continue; }
+
+      const folderName = rows[0].folder || prettifyName(file.name);
+      let { data: folder } = await sb.from('folders').select('*').eq('qbank_id', qbankId).eq('name', folderName).maybeSingle();
+      if(!folder){
+        const ins = await sb.from('folders').insert({qbank_id:qbankId, name:folderName}).select().maybeSingle();
+        folder = ins.data;
+      }
+      const { count: existingCount } = await sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', folder.id);
+      const payload = rows.map((r,i)=>({
+        qbank_id: qbankId,
+        folder_id: folder.id,
+        q_text: r.question||r.q_text||r.q||'',
+        options: r.options||r.opts||[],
+        correct_index: typeof r.answer==='number'?r.answer: typeof r.correct_index==='number'?r.correct_index: letterToIndex(r.answer||r.correct),
+        explanation: r.explanation||r.expl||'',
+        image_url: r.image_url||r.image||null,
+        subject: r.subject||folderName,
+        order_index: (existingCount||0) + i,
+      })).filter(q=>q.q_text && q.options?.length);
+      const { error: insErr } = await sb.from('questions').insert(payload);
+      if(insErr){ log.push(`${file.name}: upload error — ${insErr.message}`); continue; }
+      log.push(`${file.name} → section "${folderName}": ${payload.length} questions added.`);
+      st.textContent = log.join('\n');
+    }
+    log.push('\nAll done. Go to "Sections" tab to assign each section its exam pattern.');
+    st.textContent = log.join('\n');
+    document.getElementById('qbFiles').value='';
   };
 }
 function letterToIndex(v){
@@ -712,59 +844,76 @@ function letterToIndex(v){
   const m={A:0,B:1,C:2,D:3}; return m[String(v).trim().toUpperCase()] ?? 0;
 }
 
-async function adminQbanks(){
+async function adminFolders(){
   const body=document.getElementById('atabBody');
   const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
-  let html = `<div class="card"><h3>Assign exam type & generate sets</h3><p class="muted">Select one or more qbanks, choose the pattern, then generate. Re-generating replaces existing shared sets for the selected qbanks.</p>
-  <div id="qbCheckList">`;
-  (qbanks||[]).forEach(qb=>{
-    html += `<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:8px 0;">
-      <input type="checkbox" value="${qb.id}" class="qbchk" style="width:auto;"> ${qb.name} <span class="muted">(currently: ${EXAM_CONFIG[qb.exam_type]?.label||qb.exam_type})</span></label>`;
-  });
-  html += `</div>
-  <label>Pattern</label>
-  <select id="examTypeSel">
-    <option value="subjectwise">Subject-wise (50 q / 45 min sets, sequential subject groups)</option>
-    <option value="inicet">INICET pattern (4×50 q, 45 min, sequential)</option>
-    <option value="neetpg">NEET PG pattern (5×40 q, 42 min, sequential)</option>
-    <option value="updated_neetpg">Updated NEET PG (5×36 q, 42 min, sequential)</option>
-  </select>
-  <button class="primary" id="genSets" style="margin-top:14px;">Generate sets</button>
-  <div id="genStatus" class="muted" style="margin-top:8px;"></div>
-  </div>
-  <div class="card"><h3>All qbanks</h3><table><tr><th>Name</th><th>Type</th><th>Created</th></tr>
-  ${(qbanks||[]).map(qb=>`<tr><td>${qb.name}</td><td>${EXAM_CONFIG[qb.exam_type]?.label||qb.exam_type}</td><td>${new Date(qb.created_at).toLocaleDateString()}</td></tr>`).join('')}
-  </table></div>`;
-  body.innerHTML = html;
+  if(!qbanks || !qbanks.length){ body.innerHTML = `<div class="card muted">No qbanks uploaded yet — go to the Upload tab first.</div>`; return; }
+  S.adminQbSel = S.adminQbSel || qbanks[0].id;
+  body.innerHTML = `<div class="card">
+    <h3>Assign exam pattern per section</h3>
+    <p class="muted">Pick a qbank, tick one or more sections, choose the pattern, then generate. Re-generating replaces existing shared sets for the selected sections.</p>
+    <label>QBank</label>
+    <select id="qbPick">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.adminQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
+    <div id="folderList" style="margin-top:12px;"></div>
+    <label>Pattern</label>
+    <select id="examTypeSel">
+      <option value="subjectwise">Subject-wise (50 q / 45 min sets)</option>
+      <option value="inicet">INICET pattern (4×50 q, 45 min, sequential)</option>
+      <option value="neetpg">NEET PG pattern (5×40 q, 42 min, sequential)</option>
+      <option value="updated_neetpg">Updated NEET PG (5×36 q, 42 min, sequential)</option>
+    </select>
+    <button class="primary" id="genSets" style="margin-top:14px;">Generate sets for selected sections</button>
+    <div id="genStatus" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
+  </div>`;
+  document.getElementById('qbPick').onchange = (e)=>{ S.adminQbSel = e.target.value; adminFolders(); };
+  await renderFolderList();
+
   document.getElementById('genSets').onclick = async ()=>{
-    const ids = [...document.querySelectorAll('.qbchk:checked')].map(c=>c.value);
+    const ids = [...document.querySelectorAll('.folderChk:checked')].map(c=>c.value);
     const type = document.getElementById('examTypeSel').value;
     const st=document.getElementById('genStatus');
-    if(!ids.length){ st.textContent='Select at least one qbank.'; return; }
-    for(const id of ids){
-      st.textContent='Processing '+id+'…';
-      await sb.from('qbanks').update({exam_type:type}).eq('id', id);
-      await sb.from('sets').delete().eq('qbank_id', id).is('user_id', null);
-      const { data: qs } = await sb.from('questions').select('*').eq('qbank_id', id).order('order_index');
+    if(!ids.length){ st.textContent='Select at least one section.'; return; }
+    let log=[];
+    for(const folderId of ids){
+      const { data: folder } = await sb.from('folders').select('*').eq('id', folderId).maybeSingle();
+      await sb.from('folders').update({exam_type:type}).eq('id', folderId);
+      await sb.from('sets').delete().eq('folder_id', folderId).is('user_id', null);
+      const { data: qs } = await sb.from('questions').select('*').eq('folder_id', folderId).order('order_index');
       const cfg = EXAM_CONFIG[type];
       let setsToInsert = [];
       if(type==='subjectwise'){
         const bySubject={};
-        qs.forEach(q=>{ (bySubject[q.subject||'General']=bySubject[q.subject||'General']||[]).push(q.id); });
+        qs.forEach(q=>{ (bySubject[q.subject||folder.name]=bySubject[q.subject||folder.name]||[]).push(q.id); });
         for(const subj in bySubject){
           setsToInsert = setsToInsert.concat(chunkToSets(bySubject[subj], cfg.perSet, cfg.minutesPerFull, subj));
         }
       } else {
-        const ids2 = qs.map(q=>q.id);
-        setsToInsert = chunkToSets(ids2, cfg.perSet, cfg.minutesPerFull, null);
+        setsToInsert = chunkToSets(qs.map(q=>q.id), cfg.perSet, cfg.minutesPerFull, null);
       }
       if(setsToInsert.length){
-        await sb.from('sets').insert(setsToInsert.map(s=>({...s, qbank_id:id})));
+        await sb.from('sets').insert(setsToInsert.map(s=>({...s, qbank_id:folder.qbank_id, folder_id:folderId})));
       }
+      log.push(`${folder.name}: ${setsToInsert.length} sets generated.`);
+      st.textContent = log.join('\n');
     }
-    st.textContent='Done. Sets generated for '+ids.length+' qbank(s).';
-    adminQbanks();
+    st.textContent = log.join('\n') + '\n\nDone.';
+    renderFolderList();
   };
+}
+async function renderFolderList(){
+  const qbankId = document.getElementById('qbPick').value;
+  S.adminQbSel = qbankId;
+  const { data: folders } = await sb.from('folders').select('*').eq('qbank_id', qbankId).order('name');
+  const el = document.getElementById('folderList');
+  if(!folders || !folders.length){ el.innerHTML = `<p class="muted">No sections in this qbank yet.</p>`; return; }
+  let html = '';
+  for(const f of folders){
+    const { count } = await sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', f.id);
+    const cfg = EXAM_CONFIG[f.exam_type];
+    html += `<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:8px 0;">
+      <input type="checkbox" value="${f.id}" class="folderChk" style="width:auto;"> ${f.name} <span class="muted">(${count||0} questions — currently: ${cfg?cfg.label:'not set'})</span></label>`;
+  }
+  el.innerHTML = html;
 }
 function chunkToSets(ids, perSet, fullMinutes, subject){
   const out=[]; let setNum=1;
