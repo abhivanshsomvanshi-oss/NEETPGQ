@@ -248,6 +248,25 @@ function renderRichText(raw){
   if(inTable) flushTable();
   return html;
 }
+// Resolves a bare filename (e.g. "q1.png") referenced in the JSON against a
+// map of {lowercased filename -> uploaded public URL}. Full http(s) URLs are
+// left untouched, so existing JSON that already uses hosted image URLs keeps
+// working exactly as before.
+function resolveImageField(v, imageMap){
+  if(!v) return v;
+  if(/^https?:\/\//i.test(v)) return v;
+  return (imageMap && imageMap[String(v).trim().toLowerCase()]) || v;
+}
+// Same idea but for inline ![alt](filename) refs inside rich text fields
+// (question stem, options, explanation, table cells).
+function resolveInlineImages(text, imageMap){
+  if(!text) return text;
+  return text.replace(/!\[([^\]]*)\]\((\S+?)\)/g, (m, alt, url)=>{
+    if(/^https?:\/\//i.test(url)) return m;
+    const resolved = imageMap && imageMap[url.trim().toLowerCase()];
+    return resolved ? `![${alt}](${resolved})` : m;
+  });
+}
 function richBlock(raw, imageUrl){
   let html = '';
   if(imageUrl) html += `<img class="qimg" src="${escapeHtml(imageUrl)}" alt="question image">`;
@@ -262,7 +281,20 @@ async function boot(){
   S.session = session;
   if(session){ await loadProfile(); }
   render();
-  sb.auth.onAuthStateChange((_e, sess)=>{ S.session = sess; if(sess) loadProfile().then(render); else { S.profile=null; S.view='auth'; render(); } });
+  sb.auth.onAuthStateChange((event, sess)=>{
+    // TOKEN_REFRESHED / INITIAL_SESSION fire on their own whenever the tab
+    // regains focus (e.g. right after the native file picker closes). They
+    // don't represent a real sign-in/out, so just keep the session object
+    // fresh and skip the full re-render — re-rendering here was wiping out
+    // in-progress admin screens (like a just-selected upload file) and
+    // looked like the page had refreshed itself.
+    if(event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION'){
+      S.session = sess;
+      return;
+    }
+    S.session = sess;
+    if(sess) loadProfile().then(render); else { S.profile=null; S.view='auth'; render(); }
+  });
 }
 async function loadProfile(){
   const email = S.session.user.email;
@@ -382,7 +414,7 @@ async function renderUser(){
   if(!isActive){
     document.getElementById('utabBody').innerHTML = `<div class="locked-banner"><h3>🔒 Subscription ${S.profile.status==='pending'?'pending activation':'inactive'}</h3>
       <p class="muted">Buy a gift card of the plan you want and send it to the bot below. Admin will activate your access.</p>
-      <div class="row" style="margin-top:10px;"><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Send screenshot on Telegram</button></a></div></div>`;
+      <div class="row" style="margin-top:10px;"><a href="${TELEGRAM_BOT}"><button class="primary">Send screenshot on Telegram</button></a></div></div>`;
   }
 
   if(S.utab==='qbanks') return loadQbanksNav(isActive);
@@ -600,7 +632,7 @@ async function loadSubTab(){
     html += `<div class="card"><h3>${p.name}</h3><div class="stat-big">₹${p.price}</div><div class="muted">${p.duration_days} days</div>
       <a href="${GIFT_CARD_LINK}" target="_blank"><button class="primary" style="width:100%;margin-top:12px;">Buy ₹${p.price} gift card</button></a></div>`;
   });
-  html += `</div><div class="card"><p>Buy a gift card of the plan you want and send it to the bot below. Admin will activate your account.</p><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Open Telegram bot</button></a></div>`;
+  html += `</div><div class="card"><p>Buy a gift card of the plan you want and send it to the bot below. Admin will activate your account.</p><a href="${TELEGRAM_BOT}"><button class="primary">Open Telegram bot</button></a></div>`;
   body.innerHTML += html;
 }
 
@@ -837,7 +869,8 @@ async function adminUpload(){
   const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
   body.innerHTML = `<div class="card">
     <h3>Upload questions</h3>
-    <p class="muted">Upload a whole collection at once (multiple files) — each file becomes its own <b>section</b> inside the qbank, e.g. "Btr Anatomy", "Btr Gt-1". The pattern is now <b>auto-detected from the file/section name</b>: any of the 19 NEET PG subjects (short or full form, e.g. "anat", "ent", "obg") auto-splits into 50 q / 45 min sets (last partial set gets 0.9 min/question). Any other name (gt1, gt2, neetpg, inicet, etc.) auto-splits into 50 q / 45 min sequential subsections — once a subsection is submitted or its 45 min runs out it locks for good. You can still override a section's pattern anytime from the "Sections" tab. Accepts JSON array or NDJSON. Each object: {"question","options":[4],"answer":0,"explanation":"","image_url":"" (optional), "folder":"" (optional — overrides filename as the section name), "subject":"" (optional — overrides auto-detected subject)}. To put an image inside an option or the explanation (e.g. "match the following" columns), just include <code>![](https://image-url)</code> anywhere in that field's text — works in question, every option, explanation, and table cells alike.</p>
+    <p class="muted">Upload a whole collection at once (multiple files) — each file becomes its own <b>section</b> inside the qbank, e.g. "Btr Anatomy", "Btr Gt-1". The pattern is now <b>auto-detected from the file/section name</b>: any of the 19 NEET PG subjects (short or full form, e.g. "anat", "ent", "obg") auto-splits into 50 q / 45 min sets (last partial set gets 0.9 min/question). Any other name (gt1, gt2, neetpg, inicet, etc.) auto-splits into 50 q / 45 min sequential subsections — once a subsection is submitted or its 45 min runs out it locks for good. You can still override a section's pattern anytime from the "Sections" tab. Accepts JSON array or NDJSON. Each object: {"question","options":[4],"answer":0,"explanation":"","image_url":"" (optional), "folder":"" (optional — overrides filename as the section name), "subject":"" (optional — overrides auto-detected subject)}. To put an image inside an option or the explanation (e.g. "match the following" columns), just include <code>![](image-filename.jpg)</code> anywhere in that field's text — works in question, every option, explanation, and table cells alike.</p>
+    <p class="muted"><b>Images:</b> pick your image-only JSON/PDF-extracted image files below alongside the question files. Reference them in the JSON just by <b>filename</b> — e.g. <code>"image_url":"q1.png"</code> or <code>![](q1.png)</code> inline — no need to host them anywhere first. Matching is by filename (case-insensitive), so keep the names in your JSON identical to the image files you pick. Full <code>https://...</code> URLs still work exactly as before if you already have hosted images.</p>
     <label>QBank</label>
     <select id="qbSelect">
       <option value="__new__">+ Create new qbank</option>
@@ -848,10 +881,12 @@ async function adminUpload(){
     </div>
     <label>Files (.json / .ndjson) — select multiple</label>
     <input id="qbFiles" type="file" accept=".json,.ndjson,.txt" multiple>
+    <label>Images (optional) — select every image file your JSON refers to by filename</label>
+    <input id="qbImages" type="file" accept="image/*" multiple>
     <button class="primary" id="qbUpload" style="margin-top:14px;">Parse & upload</button>
     <div id="upStatus" class="muted" style="margin-top:10px; white-space:pre-line;"></div>
   </div>
-  <div class="card"><h3>Telegram payments</h3><p class="muted">Payment screenshots are sent to the bot below; open it to view them and then activate the matching user under the Users tab.</p><a href="${TELEGRAM_BOT}" target="_blank"><button class="primary">Open @Missionneetpg_bot</button></a></div>`;
+  <div class="card"><h3>Telegram payments</h3><p class="muted">Payment screenshots are sent to the bot below; open it to view them and then activate the matching user under the Users tab.</p><a href="${TELEGRAM_BOT}"><button class="primary">Open @Missionneetpg_bot</button></a></div>`;
 
   const qbSel = document.getElementById('qbSelect');
   const newWrap = document.getElementById('newQbWrap');
@@ -879,7 +914,26 @@ async function adminUpload(){
       explicitQbankId = qbSel.value;
     }
 
+    // Upload any picked image files to Supabase Storage first, and build a
+    // {lowercased original filename -> public URL} map. Questions below
+    // reference images purely by filename, so this runs once up front and
+    // the map is reused for every question file in this batch.
+    let imageMap = {};
+    const imageFiles = [...(document.getElementById('qbImages').files||[])];
     let log = [];
+    if(imageFiles.length){
+      st.textContent = `Uploading ${imageFiles.length} image(s)…`;
+      for(const img of imageFiles){
+        const safeName = img.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+        const path = `q-images/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${safeName}`;
+        const { error: upErr } = await sb.storage.from('question-images').upload(path, img, {upsert:false, contentType: img.type||undefined});
+        if(upErr){ log.push(`Image "${img.name}": upload failed — ${upErr.message}. (Make sure a public storage bucket named "question-images" exists in Supabase.)`); continue; }
+        const { data: pub } = sb.storage.from('question-images').getPublicUrl(path);
+        imageMap[img.name.trim().toLowerCase()] = pub.publicUrl;
+      }
+      log.push(`Images uploaded: ${Object.keys(imageMap).length}/${imageFiles.length}.`);
+      st.textContent = log.join('\n');
+    }
     for(const file of files){
       st.textContent = log.join('\n') + `\nReading ${file.name}…`;
       const text = await file.text();
@@ -922,11 +976,11 @@ async function adminUpload(){
       const payload = rows.map((r,i)=>({
         qbank_id: qbankId,
         folder_id: folder.id,
-        q_text: r.question||r.q_text||r.q||'',
-        options: r.options||r.opts||[],
+        q_text: resolveInlineImages(r.question||r.q_text||r.q||'', imageMap),
+        options: (r.options||r.opts||[]).map(o=>resolveInlineImages(o, imageMap)),
         correct_index: typeof r.answer==='number'?r.answer: typeof r.correct_index==='number'?r.correct_index: letterToIndex(r.answer||r.correct),
-        explanation: r.explanation||r.expl||'',
-        image_url: r.image_url||r.image||null,
+        explanation: resolveInlineImages(r.explanation||r.expl||'', imageMap),
+        image_url: resolveImageField(r.image_url||r.image||null, imageMap),
         subject: r.subject || detection.subject || folderName,
         order_index: (existingCount||0) + i,
       })).filter(q=>q.q_text && q.options?.length);
@@ -959,6 +1013,7 @@ async function adminUpload(){
     log.push('\nAll done. Subject-named files auto-split into 50 q / 45 min sets. Any other name (gt1, gt2, neetpg, inicet, etc.) auto-splits into 50 q / 45 min sequential subsections. You can still override a section\'s pattern from the "Sections" tab.');
     st.textContent = log.join('\n');
     document.getElementById('qbFiles').value='';
+    document.getElementById('qbImages').value='';
   };
 }
 function letterToIndex(v){
