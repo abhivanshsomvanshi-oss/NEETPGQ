@@ -282,17 +282,17 @@ async function boot(){
   if(session){ await loadProfile(); }
   render();
   sb.auth.onAuthStateChange((event, sess)=>{
-    // TOKEN_REFRESHED / INITIAL_SESSION fire on their own whenever the tab
-    // regains focus (e.g. right after the native file picker closes). They
-    // don't represent a real sign-in/out, so just keep the session object
-    // fresh and skip the full re-render — re-rendering here was wiping out
-    // in-progress admin screens (like a just-selected upload file) and
-    // looked like the page had refreshed itself.
-    if(event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION'){
-      S.session = sess;
-      return;
-    }
+    // Any of these events can re-fire for the SAME already-signed-in user
+    // whenever the tab regains focus — which happens the instant the native
+    // file picker closes after choosing a file. Re-rendering in that case
+    // wipes whatever screen (and file selection) was in progress and looks
+    // like the page refreshed itself. So we only reload profile + re-render
+    // when the signed-in user has actually changed (real sign-in/out),
+    // never just because Supabase re-emitted an event for the same user.
+    const prevUserId = S.session?.user?.id || null;
+    const nextUserId = sess?.user?.id || null;
     S.session = sess;
+    if(prevUserId === nextUserId) return; // same user (or same signed-out state) — no-op
     if(sess) loadProfile().then(render); else { S.profile=null; S.view='auth'; render(); }
   });
 }
@@ -869,8 +869,6 @@ async function adminUpload(){
   const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
   body.innerHTML = `<div class="card">
     <h3>Upload questions</h3>
-    <p class="muted">Upload a whole collection at once (multiple files) — each file becomes its own <b>section</b> inside the qbank, e.g. "Btr Anatomy", "Btr Gt-1". The pattern is now <b>auto-detected from the file/section name</b>: any of the 19 NEET PG subjects (short or full form, e.g. "anat", "ent", "obg") auto-splits into 50 q / 45 min sets (last partial set gets 0.9 min/question). Any other name (gt1, gt2, neetpg, inicet, etc.) auto-splits into 50 q / 45 min sequential subsections — once a subsection is submitted or its 45 min runs out it locks for good. You can still override a section's pattern anytime from the "Sections" tab. Accepts JSON array or NDJSON. Each object: {"question","options":[4],"answer":0,"explanation":"","image_url":"" (optional), "folder":"" (optional — overrides filename as the section name), "subject":"" (optional — overrides auto-detected subject)}. To put an image inside an option or the explanation (e.g. "match the following" columns), just include <code>![](image-filename.jpg)</code> anywhere in that field's text — works in question, every option, explanation, and table cells alike.</p>
-    <p class="muted"><b>Images:</b> pick your image-only JSON/PDF-extracted image files below alongside the question files. Reference them in the JSON just by <b>filename</b> — e.g. <code>"image_url":"q1.png"</code> or <code>![](q1.png)</code> inline — no need to host them anywhere first. Matching is by filename (case-insensitive), so keep the names in your JSON identical to the image files you pick. Full <code>https://...</code> URLs still work exactly as before if you already have hosted images.</p>
     <label>QBank</label>
     <select id="qbSelect">
       <option value="__new__">+ Create new qbank</option>
