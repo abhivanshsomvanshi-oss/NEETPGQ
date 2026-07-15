@@ -24,14 +24,15 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 #app{min-height:100vh;display:flex;flex-direction:column;}
 a{color:var(--amber);}
 h1,h2,h3{font-family:var(--display);margin:0 0 8px;}
-button{font-family:var(--body);cursor:pointer;border:none;border-radius:10px;padding:11px 18px;font-weight:600;font-size:14px;transition:transform .08s ease, opacity .15s;}
-button:active{transform:scale(.97);}
-button.primary{background:var(--amber);color:#241a06;}
+button{font-family:var(--body);cursor:pointer;border:none;border-radius:12px;padding:13px 20px;font-weight:600;font-size:14.5px;transition:transform .08s ease, opacity .15s, box-shadow .15s;min-height:44px;}
+button:active{transform:scale(.96);}
+button.primary{background:var(--amber);color:#241a06;box-shadow:0 3px 10px rgba(232,163,61,.25);}
+button.primary:hover{box-shadow:0 4px 14px rgba(232,163,61,.4);}
 button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);}
-button.danger{background:var(--red);color:#fff;}
+button.danger{background:var(--red);color:#fff;box-shadow:0 3px 10px rgba(229,72,77,.25);}
 button.subtle{background:var(--surface-2);color:var(--text);}
-button:disabled{opacity:.4;cursor:not-allowed;}
-input,select,textarea{font-family:var(--body);background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:10px;font-size:14px;width:100%;}
+button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
+input,select,textarea{font-family:var(--body);background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:15px;width:100%;min-height:44px;}
 label{font-size:12px;color:var(--text-dim);display:block;margin:10px 0 5px;text-transform:uppercase;letter-spacing:.04em;}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(11,18,32,.92);backdrop-filter:blur(8px);z-index:50;}
 .brand{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:.01em;display:flex;align-items:center;gap:8px;}
@@ -47,23 +48,25 @@ label{font-size:12px;color:var(--text-dim);display:block;margin:10px 0 5px;text-
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
 .muted{color:var(--text-dim);font-size:13px;}
 .tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto;}
-.tab{padding:10px 14px;font-size:13px;font-weight:600;color:var(--text-dim);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer;}
+.tab{padding:13px 16px;font-size:14px;font-weight:600;color:var(--text-dim);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer;min-height:44px;display:flex;align-items:center;}
 .tab.on{color:var(--amber);border-color:var(--amber);}
 .crumbs{font-size:12px;color:var(--text-dim);margin-bottom:12px;}
 .crumbs span{cursor:pointer;color:var(--amber);}
-.qrow{display:flex;justify-content:space-between;align-items:center;padding:14px;background:var(--surface-2);border-radius:10px;margin-bottom:8px;cursor:pointer;}
-.lockicon{opacity:.5;}
+.qrow{display:flex;justify-content:space-between;align-items:center;padding:16px;background:var(--surface-2);border-radius:12px;margin-bottom:9px;cursor:pointer;transition:background .15s;}
+.qrow:hover{background:#212c45;}
+.lockicon{opacity:.6;font-size:15px;}
 .exam-shell{display:grid;grid-template-columns:1fr 260px;gap:0;flex:1;}
 @media(max-width:760px){.exam-shell{grid-template-columns:1fr;}}
 .exam-main{padding:20px;overflow-y:auto;}
 .exam-side{background:var(--surface);border-left:1px solid var(--border);padding:16px;}
 .timer{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--amber);letter-spacing:.03em;background:var(--amber-dim);padding:8px 14px;border-radius:10px;display:inline-block;}
-.opt{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:9px;cursor:pointer;}
+.opt{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;font-size:15px;transition:border-color .15s, background .15s;}
+.opt:hover{border-color:var(--amber-dim);}
 .opt.sel{border-color:var(--amber);background:#241d0d;}
 .opt.correct{border-color:var(--green);background:#0f2a1c;}
 .opt.wrong{border-color:var(--red);background:#2a1113;}
-.palette{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:12px;}
-.pnum{aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:600;cursor:pointer;border:2px solid transparent;color:#0B1220;}
+.palette{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px;}
+.pnum{aspect-ratio:1;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:700;cursor:pointer;border:2px solid transparent;color:#0B1220;min-height:38px;}
 .pnum.not_visited{background:var(--gray);}
 .pnum.not_answered{background:var(--red);color:#fff;}
 .pnum.answered{background:var(--green);color:#fff;}
@@ -72,10 +75,10 @@ label{font-size:12px;color:var(--text-dim);display:block;margin:10px 0 5px;text-
 .pnum.current{border-color:var(--amber);}
 .legend{display:flex;flex-direction:column;gap:5px;font-size:11px;margin-top:14px;color:var(--text-dim);}
 .legend span{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle;}
-.reviewcard{background:var(--paper);color:var(--text-inv);border-radius:var(--radius);padding:18px;margin-bottom:12px;}
-.reviewcard .opt{background:var(--paper-2);color:var(--text-inv);border-color:#d6d3c6;}
-.reviewcard .opt.correct{background:#d8ecdf;border-color:var(--green);}
-.reviewcard .opt.wrong{background:#f4d6d6;border-color:var(--red);}
+.reviewcard{background:var(--surface);color:var(--text);border-radius:var(--radius);padding:18px;margin-bottom:12px;border:1px solid var(--border);}
+.reviewcard .opt{background:var(--surface-2);color:var(--text);border-color:var(--border);}
+.reviewcard .opt.correct{background:#0f2a1c;border-color:var(--green);}
+.reviewcard .opt.wrong{background:#2a1113;border-color:var(--red);}
 .catbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
 .catbtns button{font-size:12px;padding:7px 10px;}
 .overlay{position:fixed;inset:0;background:rgba(11,18,32,.85);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
@@ -84,7 +87,7 @@ label{font-size:12px;color:var(--text-dim);display:block;margin:10px 0 5px;text-
 table.rt{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0;}
 table.rt th,table.rt td{text-align:left;padding:8px 6px;border:1px solid var(--border);}
 table.rt th{color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;}
-.reviewcard table.rt th,.reviewcard table.rt td{border-color:#d6d3c6;}
+.reviewcard table.rt th,.reviewcard table.rt td{border-color:var(--border);}
 table{width:100%;border-collapse:collapse;font-size:13px;}
 th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);}
 th{color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;}
@@ -533,7 +536,10 @@ async function setRow(s, isActive, locked=false){
   return `<div class="qrow" style="flex-direction:column;align-items:stretch;gap:6px;cursor:default;">
     <div class="row" style="justify-content:space-between;">
       <div><b>Set ${s.set_number}</b> · ${n} questions · ${s.duration_minutes} min ${locked?'<span class="lockicon">🔒</span>':''}</div>
-      <button class="${isActive&&!locked?'primary':'ghost'}" data-startset="${s.id}" ${(!isActive||locked)?'disabled':''}>${!isActive?'Locked':locked?'Complete previous':att?'Retake':'Start'}</button>
+      <div class="row" style="gap:8px;">
+        ${att?`<button class="subtle" data-reviewset="${s.id}">Review</button>`:''}
+        <button class="${isActive&&!locked?'primary':'ghost'}" data-startset="${s.id}" ${(!isActive||locked)?'disabled':''}>${!isActive?'Locked':locked?'Complete previous':att?'Retake':'Start'}</button>
+      </div>
     </div>
     ${statsHtml}
   </div>`;
@@ -542,6 +548,18 @@ function wireSetRows(){
   document.querySelectorAll('[data-startset]').forEach(b=>{
     b.onclick = ()=> startAttempt(b.dataset.startset);
   });
+  document.querySelectorAll('[data-reviewset]').forEach(b=>{
+    b.onclick = ()=> openReviewForSet(b.dataset.reviewset);
+  });
+}
+async function openReviewForSet(setId){
+  const { data: s } = await sb.from('sets').select('*').eq('id', setId).maybeSingle();
+  const { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', setId).eq('status','submitted').order('submitted_at',{ascending:false}).limit(1).maybeSingle();
+  if(!s || !att){ toast('No completed attempt to review yet'); return; }
+  const { data: qs } = await sb.from('questions').select('*').in('id', s.question_ids);
+  const questions = s.question_ids.map(id=>qs.find(q=>q.id===id)).filter(Boolean);
+  S.review = { att, set: s, questions, showExpl:false };
+  renderReviewChoice();
 }
 async function loadFullTestReview(folderId){
   const { data: sets } = await sb.from('sets').select('*').eq('folder_id', folderId).is('user_id', null).eq('set_type','main').order('set_number');
@@ -783,7 +801,7 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
   app.innerHTML = `<div class="topbar"><div class="brand"><span class="dot"></span>Review ${i+1}/${questions.length} ${wrongOnly?'· wrong only':''}</div><button class="ghost" id="closeRev" style="padding:8px 12px;font-size:12px;">Close</button></div>
   <div class="container">
     <div class="reviewcard" id="revCapture">
-      <div class="qmeta" style="color:#555">Question ${i+1}</div>
+      <div class="qmeta">Question ${i+1}</div>
       <div style="font-weight:600;">${richBlock(q.q_text, q.image_url)}</div>
       <div id="revOpts"></div>
       ${withExpl?`<div class="divider"></div><div><b>Explanation</b>${renderRichText(q.explanation||'No explanation provided.')}</div>`:''}
@@ -821,7 +839,24 @@ async function captureShot(withExpl){
   const dividerEl = node.querySelector('.divider');
   let hid=false;
   if(!withExpl && dividerEl){ dividerEl.style.display='none'; if(explDiv) explDiv.style.display='none'; hid=true; }
-  const canvas = await html2canvas(node, {backgroundColor:'#EFEEE7'});
+  let canvas;
+  try{
+    canvas = await html2canvas(node, {backgroundColor:'#141B2E', useCORS:true, imageTimeout:15000});
+  }catch(err){
+    // Cross-origin question images without permissive CORS headers can
+    // "taint" the canvas and make html2canvas throw when it tries to read
+    // pixel data back out. Fall back to a version without useCORS so the
+    // rest of the screenshot (text, options) still gets saved rather than
+    // failing completely.
+    try{
+      canvas = await html2canvas(node, {backgroundColor:'#141B2E'});
+      toast('Saved, but the image couldn\'t be captured (host doesn\'t allow it)');
+    }catch(err2){
+      if(hid){ dividerEl.style.display=''; if(explDiv) explDiv.style.display=''; }
+      toast('Screenshot failed — try again');
+      return;
+    }
+  }
   if(hid){ dividerEl.style.display=''; if(explDiv) explDiv.style.display=''; }
   const link=document.createElement('a');
   link.download = 'question_'+Date.now()+'.png';
@@ -1029,7 +1064,10 @@ async function adminFolders(){
     <h3>Assign exam pattern per section</h3>
     <p class="muted">Pick a qbank, tick one or more sections, choose the pattern, then generate. Re-generating replaces existing shared sets for the selected sections.</p>
     <label>QBank</label>
-    <select id="qbPick">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.adminQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
+    <div style="display:flex; gap:8px; align-items:flex-end;">
+      <select id="qbPick" style="flex:1;">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.adminQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
+      <button class="danger" id="delQbankBtn" style="white-space:nowrap;">Delete this qbank</button>
+    </div>
     <div id="folderList" style="margin-top:12px;"></div>
     <label>Pattern</label>
     <select id="examTypeSel">
@@ -1043,6 +1081,19 @@ async function adminFolders(){
     <div id="genStatus" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
   </div>`;
   document.getElementById('qbPick').onchange = (e)=>{ S.adminQbSel = e.target.value; adminFolders(); };
+  document.getElementById('delQbankBtn').onclick = async ()=>{
+    const qbId = document.getElementById('qbPick').value;
+    const qb = qbanks.find(q=>q.id===qbId);
+    if(!qb) return;
+    const typed = prompt(`This permanently deletes the qbank "${qb.name}" and every section, question, and user attempt inside it. This cannot be undone.\n\nType the qbank name exactly to confirm:`);
+    if(typed !== qb.name){ if(typed !== null) alert('Name did not match — nothing was deleted.'); return; }
+    const btn = document.getElementById('delQbankBtn');
+    btn.disabled = true; btn.textContent = 'Deleting…';
+    const { error } = await sb.from('qbanks').delete().eq('id', qbId);
+    if(error){ alert('Delete failed: ' + error.message); btn.disabled=false; btn.textContent='Delete this qbank'; return; }
+    S.adminQbSel = null;
+    adminFolders();
+  };
   await renderFolderList();
 
   document.getElementById('genSets').onclick = async ()=>{
