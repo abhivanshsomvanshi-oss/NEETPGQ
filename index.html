@@ -389,7 +389,11 @@ function render(){
     document.getElementById('so').onclick = signOut;
     return;
   }
-  if(S.profile?.role==='admin') return renderAdmin();
+  // Respect S.view here: an admin who has switched into "Practice (user
+  // view)" should keep seeing the user-side screens as navigation happens
+  // (e.g. via goTo/back), not get bounced back to the admin panel just
+  // because their account role is admin.
+  if(S.profile?.role==='admin' && S.view!=='user') return renderAdmin();
   return renderUser();
 }
 
