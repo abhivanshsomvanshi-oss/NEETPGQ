@@ -192,6 +192,49 @@ function detectPlatformName(name){
 
 let S = { session:null, profile:null, deviceId:null, view:'loading', nav:{} };
 
+// ---------- in-app back navigation ----------
+// The app never changes the URL, so by default the phone's/browser's back
+// button (or back gesture) has nothing to "undo" and just closes the app.
+// To fix that, every time the user moves to a deeper/different screen we
+// push one browser-history entry and remember a snapshot of where they
+// were. A hardware/gesture back then fires `popstate`, which we catch here
+// to restore that snapshot instead of letting the OS close the app. Only
+// once our own stack is empty (i.e. we're back at the very first screen)
+// does back behave like normal browser/app-exit back.
+let navStack = [];
+function snapshotState(){
+  return { view:S.view, utab:S.utab, atab:S.atab, nav:{...(S.nav||{})}, exam:S.exam||null, review:S.review||null };
+}
+// Wrap any navigation that should be "undo-able" with the back button:
+// goTo({nav:{...}}) / goTo({utab:'stats'}) / goTo({view:'exam', exam:{...}}) etc.
+function goTo(changes){
+  navStack.push(snapshotState());
+  history.pushState({d:navStack.length}, '');
+  Object.assign(S, changes);
+  render();
+}
+window.addEventListener('popstate', ()=>{
+  // Leaving an in-progress exam via hardware back: stop the timer and flush
+  // the latest answers, same as the explicit "← Back" button does.
+  if(S.exam){
+    clearInterval(timerHandle);
+    clearTimeout(saveTimeout);
+    sb.from('attempts').update({answers:S.exam.att.answers}).eq('id', S.exam.att.id);
+  }
+  if(navStack.length){
+    const prev = navStack.pop();
+    S.view=prev.view; S.utab=prev.utab; S.atab=prev.atab; S.nav=prev.nav||{}; S.exam=prev.exam||null; S.review=prev.review||null;
+    render();
+  } else if(S.exam || S.view==='exam'){
+    // Nothing left on our stack, but we were mid-exam — land safely on the
+    // dashboard rather than showing a broken exam screen.
+    S.exam=null; S.view='user'; S.utab='qbanks'; S.nav={};
+    render();
+  }
+  // else: our stack is empty and we're already on a top-level screen, so
+  // there's nothing to intercept — let the platform's normal back happen.
+});
+
 function toast(msg){
   const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(),2600);
@@ -400,7 +443,7 @@ async function renderUser(){
   const adminBackBtn = S.profile?.role==='admin' ? `<button class="primary" id="backToAdminBtn" style="padding:8px 12px;font-size:12px;">← Back to Admin</button>` : '';
   app.innerHTML = topbar('QBank Console', adminBackBtn);
   bindTopbar();
-  if(document.getElementById('backToAdminBtn')) document.getElementById('backToAdminBtn').onclick = ()=>{ S.view='admin'; S.atab='upload'; renderAdmin(); };
+  if(document.getElementById('backToAdminBtn')) document.getElementById('backToAdminBtn').onclick = ()=>{ goTo({view:'admin', atab:'upload'}); };
   const wrap = document.createElement('div'); wrap.className='container';
   app.appendChild(wrap);
 
@@ -412,7 +455,7 @@ async function renderUser(){
     <div class="tab ${S.utab==='decks'?'on':''}" data-t="decks">Category decks</div>
     <div class="tab ${S.utab==='sub'?'on':''}" data-t="sub">Subscription</div>
   </div><div id="utabBody"></div>`;
-  wrap.querySelectorAll('.tab[data-t]').forEach(t=>t.onclick=()=>{S.utab=t.dataset.t; S.nav={}; renderUser();});
+  wrap.querySelectorAll('.tab[data-t]').forEach(t=>t.onclick=()=>{ if(t.dataset.t===S.utab) return; goTo({utab:t.dataset.t, nav:{}}); });
 
   if(!isActive){
     document.getElementById('utabBody').innerHTML = `<div class="locked-banner"><h3>🔒 Subscription ${S.profile.status==='pending'?'pending activation':'inactive'}</h3>
@@ -443,39 +486,50 @@ async function loadQbankList(isActive){
   const body=document.getElementById('utabBody');
   const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
   if(!qbanks || !qbanks.length){ body.innerHTML += `<div class="card muted">No qbanks published yet.</div>`; return; }
+  // Fire all section-count queries in parallel instead of one-by-one —
+  // sequential awaits here were the main cause of the slow load.
+  const counts = await Promise.all(qbanks.map(qb=>
+    sb.from('folders').select('id', {count:'exact', head:true}).eq('qbank_id', qb.id)
+  ));
   let html = '<div class="grid">';
-  for(const qb of qbanks){
-    const { count } = await sb.from('folders').select('id', {count:'exact', head:true}).eq('qbank_id', qb.id);
+  qbanks.forEach((qb,i)=>{
+    const count = counts[i].count;
     html += `<div class="card" style="cursor:pointer;" data-qb="${qb.id}"><h3>${qb.name}</h3><div class="muted">${count||0} sections</div></div>`;
-  }
+  });
   html += '</div>';
   body.innerHTML += html;
-  body.querySelectorAll('[data-qb]').forEach(el=>el.onclick=()=>{ S.nav={qbankId: el.dataset.qb}; renderUser(); });
+  body.querySelectorAll('[data-qb]').forEach(el=>el.onclick=()=>{ goTo({nav:{qbankId: el.dataset.qb}}); });
 }
 async function loadFolderList(isActive){
   const body=document.getElementById('utabBody');
   const { data: qb } = await sb.from('qbanks').select('*').eq('id', S.nav.qbankId).maybeSingle();
   body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank'}]);
   const { data: folders } = await sb.from('folders').select('*').eq('qbank_id', S.nav.qbankId).order('name');
+  // Same fix as the qbank list: run every section's question-count query in
+  // parallel rather than awaiting them one at a time, which was what made
+  // opening a qbank (e.g. BTR) with many sections feel slow.
+  const counts = await Promise.all((folders||[]).map(f=>
+    sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', f.id)
+  ));
   let html = '';
-  for(const f of (folders||[])){
-    const { count } = await sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', f.id);
+  (folders||[]).forEach((f,i)=>{
+    const count = counts[i].count;
     const cfg = EXAM_CONFIG[f.exam_type];
     html += `<div class="qrow" data-folder="${f.id}">
       <div><b>${f.name}</b> · ${count||0} questions</div>
       <span class="badge ${cfg?'active':'unset'}">${cfg?cfg.label:'Not configured'}</span>
     </div>`;
-  }
+  });
   if(!html) html = `<div class="card muted">No sections in this qbank yet.</div>`;
   document.getElementById('utabBody').innerHTML += html;
   const crumb = document.querySelector('[data-crumb="0"]');
-  if(crumb) crumb.onclick = ()=>{ S.nav={}; renderUser(); };
+  if(crumb) crumb.onclick = ()=>{ goTo({nav:{}}); };
   document.querySelectorAll('[data-folder]').forEach(el=>{
     el.onclick = async ()=>{
       const fid = el.dataset.folder;
       const { data: f } = await sb.from('folders').select('*').eq('id', fid).maybeSingle();
       if(!f.exam_type){ toast('Admin has not configured this section yet'); return; }
-      S.nav.folderId = fid; renderUser();
+      goTo({nav:{...S.nav, folderId: fid}});
     };
   });
 }
@@ -484,8 +538,8 @@ async function loadFolderSets(isActive){
   const { data: qb } = await sb.from('qbanks').select('*').eq('id', S.nav.qbankId).maybeSingle();
   const { data: folder } = await sb.from('folders').select('*').eq('id', S.nav.folderId).maybeSingle();
   body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank', onClick:true},{label:folder?.name||'Section'}]);
-  document.querySelector('[data-crumb="0"]').onclick = ()=>{ S.nav={}; renderUser(); };
-  document.querySelector('[data-crumb="1"]').onclick = ()=>{ S.nav={qbankId:S.nav.qbankId}; renderUser(); };
+  document.querySelector('[data-crumb="0"]').onclick = ()=>{ goTo({nav:{}}); };
+  document.querySelector('[data-crumb="1"]').onclick = ()=>{ goTo({nav:{qbankId:S.nav.qbankId}}); };
 
   const { data: sets } = await sb.from('sets').select('*').eq('folder_id', folder.id).is('user_id', null).order('subject').order('set_number');
   let html = '';
@@ -558,8 +612,7 @@ async function openReviewForSet(setId){
   if(!s || !att){ toast('No completed attempt to review yet'); return; }
   const { data: qs } = await sb.from('questions').select('*').in('id', s.question_ids);
   const questions = s.question_ids.map(id=>qs.find(q=>q.id===id)).filter(Boolean);
-  S.review = { att, set: s, questions, showExpl:false };
-  renderReviewChoice();
+  goTo({ review:{ att, set: s, questions, showExpl:false } });
 }
 async function loadFullTestReview(folderId){
   const { data: sets } = await sb.from('sets').select('*').eq('folder_id', folderId).is('user_id', null).eq('set_type','main').order('set_number');
@@ -574,8 +627,7 @@ async function loadFullTestReview(folderId){
     totalScore += (att.score||0); totalCorrect += (att.correct_count||0); totalQ += (att.total_questions||ordered.length);
   }
   const fakeAtt = { id:null, answers: mergedAnswers, score: totalScore, correct_count: totalCorrect, total_questions: totalQ };
-  S.review = { att: fakeAtt, set: {question_ids: allQuestions.map(q=>q.id)}, questions: allQuestions, showExpl:false };
-  renderReviewChoice();
+  goTo({ review:{ att: fakeAtt, set: {question_ids: allQuestions.map(q=>q.id)}, questions: allQuestions, showExpl:false } });
 }
 
 async function loadStatsTab(){
@@ -668,8 +720,7 @@ async function startAttempt(setId){
   const elapsedSec = Math.floor((Date.now()-new Date(att.started_at).getTime())/1000);
   const totalSec = Math.round(set.duration_minutes*60);
   if(elapsedSec >= totalSec){ await submitAttempt(att, set, ordered, true); return; }
-  S.exam = { set, att, questions:ordered, idx:0, totalSec, elapsedAtLoad:elapsedSec };
-  S.view='exam'; renderExam();
+  goTo({ exam:{ set, att, questions:ordered, idx:0, totalSec, elapsedAtLoad:elapsedSec }, view:'exam' });
   startTimer();
   preloadQuestionImages(ordered);
 }
@@ -698,7 +749,7 @@ function renderExam(){
   const { set, att, questions, idx } = S.exam;
   const q = questions[idx];
   if(att.answers[q.id].status==='not_visited') att.answers[q.id].status='not_answered';
-  app.innerHTML = `<div class="topbar"><div class="brand"><span class="dot"></span>Set ${set.set_number||''} ${set.category?('· '+set.category.replace('_',' ')):''}</div><span class="timer" id="examTimer">${fmtTime(S.exam.totalSec-S.exam.elapsedAtLoad)}</span></div>
+  app.innerHTML = `<div class="topbar"><div class="row" style="gap:10px;align-items:center;"><button class="ghost" id="exitExamBtn" style="padding:8px 12px;font-size:12px;min-height:auto;">← Back</button><div class="brand"><span class="dot"></span>Set ${set.set_number||''} ${set.category?('· '+set.category.replace('_',' ')):''}</div></div><span class="timer" id="examTimer">${fmtTime(S.exam.totalSec-S.exam.elapsedAtLoad)}</span></div>
   <div class="exam-shell">
     <div class="exam-main">
       <div class="qmeta">Question ${idx+1} of ${questions.length}</div>
@@ -732,6 +783,13 @@ function renderExam(){
   document.getElementById('markQ').onclick=()=>{ const a=att.answers[q.id]; if(['marked','answered_marked'].includes(a.status)){ a.status = a.selected!=null?'answered':'not_answered'; } else { a.status = a.selected!=null?'answered_marked':'marked'; } saveAttemptSoft(); renderExam(); };
   document.getElementById('submitSet').onclick=()=>{
     if(confirm('Submit this set now? You cannot resume it after submission.')) submitAttempt(att,set,questions,false);
+  };
+  document.getElementById('exitExamBtn').onclick=()=>{
+    saveAttemptSoft();
+    // Go through the same path as the phone's back button/gesture, so both
+    // land on exactly the same previous screen (the set list) instead of
+    // resetting navigation.
+    history.back();
   };
 }
 function renderOpts(){
@@ -771,6 +829,7 @@ async function submitAttempt(att, set, questions, auto){
   await sb.from('attempts').update({answers:att.answers, status:'submitted', submitted_at:new Date().toISOString(), score, correct_count:correctCount, total_questions:qs.length}).eq('id', att.id);
   att.status='submitted'; att.score=score;
   toast(auto? 'Time up — set auto-submitted' : 'Set submitted');
+  S.exam = null;
   S.review = { att, set, questions, showExpl:false };
   renderReviewChoice();
 }
@@ -791,7 +850,7 @@ function renderReviewChoice(){
   </div>`;
   document.getElementById('rwo').onclick=()=>renderReview(false,0,document.getElementById('wrongOnlyChk').checked);
   document.getElementById('rwith').onclick=()=>renderReview(true,0,document.getElementById('wrongOnlyChk').checked);
-  document.getElementById('backHome').onclick=()=>{ S.view='user'; S.nav={}; renderUser(); };
+  document.getElementById('backHome').onclick=()=>{ history.back(); };
 }
 async function renderReview(withExpl, i=0, wrongOnly=false){
   const { att, questions: allQuestions } = S.review;
@@ -802,7 +861,7 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
     app.innerHTML = `<div class="container" style="max-width:480px;padding-top:14vh;text-align:center;">
       <div class="card"><h2>No wrong answers 🎉</h2><p class="muted">Every attempted question in this set was correct.</p>
       <button class="ghost" id="backHome2">Back to dashboard</button></div></div>`;
-    document.getElementById('backHome2').onclick=()=>{ S.view='user'; S.nav={}; renderUser(); };
+    document.getElementById('backHome2').onclick=()=>{ history.back(); };
     return;
   }
   i = Math.max(0, Math.min(i, questions.length-1));
@@ -827,7 +886,7 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
     else if(a.selected===idx) cls='wrong';
     return `<div class="opt ${cls}">${renderRichText(o)}</div>`;
   }).join('');
-  document.getElementById('closeRev').onclick=()=>{ S.view='user'; S.nav={}; renderUser(); };
+  document.getElementById('closeRev').onclick=()=>{ history.back(); };
   document.getElementById('pv').onclick=()=>renderReview(withExpl, i-1, wrongOnly);
   document.getElementById('nx').onclick=()=>renderReview(withExpl, i+1, wrongOnly);
   if(!withExpl){
@@ -875,10 +934,13 @@ async function captureShot(withExpl){
   toast('Image saved to downloads');
 }
 
-// override render() to route to exam view
+// override render() to route to exam/review views (needed so popstate-driven
+// restores, which just set S.exam/S.review and call render(), land back on
+// the right screen)
 const _origRender = render;
 render = function(){
   if(S.session && S.view==='exam' && S.exam){ return renderExam(); }
+  if(S.session && S.review){ return renderReviewChoice(); }
   return _origRender();
 };
 
@@ -895,7 +957,7 @@ async function renderAdmin(){
     <div class="tab ${S.atab==='plans'?'on':''}" data-t="plans">Plans</div>
     <div class="tab ${S.atab==='attempt'?'on':''}" data-t="attempt">Practice (user view)</div>
   </div><div id="atabBody"></div>`;
-  wrap.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{S.atab=t.dataset.t; renderAdmin();});
+  wrap.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ if(t.dataset.t===S.atab) return; goTo({atab:t.dataset.t}); });
   if(S.atab==='upload') return adminUpload();
   if(S.atab==='folders') return adminFolders();
   if(S.atab==='users') return adminUsers();
