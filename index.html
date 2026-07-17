@@ -614,7 +614,10 @@ async function openReviewForSet(setId){
   const { data: s } = await sb.from('sets').select('*').eq('id', setId).maybeSingle();
   const { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', setId).eq('status','submitted').order('submitted_at',{ascending:false}).limit(1).maybeSingle();
   if(!s || !att){ toast('No completed attempt to review yet'); return; }
-  const { data: qs } = await sb.from('questions').select('*').in('id', s.question_ids);
+  // Same reasoning as startAttempt: skip the (possibly large, embedded-base64)
+  // image_url in this bulk fetch so review opens quickly; images are loaded
+  // lazily per-question as you page through (see ensureQuestionImage).
+  const { data: qs } = await sb.from('questions').select('id, q_text, options, correct_index, explanation, subject').in('id', s.question_ids);
   const questions = s.question_ids.map(id=>qs.find(q=>q.id===id)).filter(Boolean);
   goTo({ review:{ att, set: s, questions, showExpl:false } });
 }
@@ -624,7 +627,7 @@ async function loadFullTestReview(folderId){
   for(const s of sets){
     const { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').order('submitted_at',{ascending:false}).limit(1).maybeSingle();
     if(!att){ toast('Complete every section first'); return; }
-    const { data: qs } = await sb.from('questions').select('*').in('id', s.question_ids);
+    const { data: qs } = await sb.from('questions').select('id, q_text, options, correct_index, explanation, subject').in('id', s.question_ids);
     const ordered = s.question_ids.map(id=>qs.find(q=>q.id===id)).filter(Boolean);
     allQuestions = allQuestions.concat(ordered);
     Object.assign(mergedAnswers, att.answers);
@@ -714,7 +717,14 @@ async function loadSubTab(){
 async function startAttempt(setId){
   const { data: set } = await sb.from('sets').select('*').eq('id', setId).maybeSingle();
   let { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', setId).eq('status','in_progress').maybeSingle();
-  const { data: questions } = await sb.from('questions').select('*').in('id', set.question_ids);
+  // Deliberately excludes image_url: some questions now carry embedded
+  // base64 images (can be several hundred KB each), and pulling that for
+  // every question in the set up front is what was making a set take so
+  // long to open. Text loads instantly; each question's image is fetched
+  // lazily (see ensureQuestionImage) only once you're actually viewing it.
+  const { data: questions } = await sb.from('questions')
+    .select('id, q_text, options, correct_index, explanation, subject')
+    .in('id', set.question_ids);
   const ordered = set.question_ids.map(id=>questions.find(q=>q.id===id)).filter(Boolean);
   if(!att){
     const initAnswers={}; ordered.forEach(q=>initAnswers[q.id]={selected:null,status:'not_visited'});
@@ -726,15 +736,18 @@ async function startAttempt(setId){
   if(elapsedSec >= totalSec){ await submitAttempt(att, set, ordered, true); return; }
   goTo({ exam:{ set, att, questions:ordered, idx:0, totalSec, elapsedAtLoad:elapsedSec }, view:'exam' });
   startTimer();
-  preloadQuestionImages(ordered);
 }
-// Kicks off background loading for every image in this set right away,
-// using the browser's own image cache. By the time the user navigates to
-// an image-based question, it's already downloaded instead of loading live
-// mid-question and eating into the timer.
-function preloadQuestionImages(questions){
-  questions.forEach(q=>{
-    if(q.image_url){ const img = new Image(); img.src = q.image_url; }
+// Fetches a single question's image_url on demand (undefined = not fetched
+// yet, null = fetched and confirmed there isn't one). Calls onLoaded() once
+// it arrives so the caller can re-render if the user is still looking at
+// this exact question — used from both the exam player and review screens.
+function ensureQuestionImage(q, onLoaded){
+  if(q.image_url !== undefined || q._imgFetching) return;
+  q._imgFetching = true;
+  sb.from('questions').select('image_url').eq('id', q.id).maybeSingle().then(({data})=>{
+    q.image_url = data ? data.image_url : null;
+    q._imgFetching = false;
+    if(onLoaded) onLoaded();
   });
 }
 let timerHandle=null;
@@ -753,11 +766,12 @@ function renderExam(){
   const { set, att, questions, idx } = S.exam;
   const q = questions[idx];
   if(att.answers[q.id].status==='not_visited') att.answers[q.id].status='not_answered';
+  ensureQuestionImage(q, ()=>{ if(S.exam && S.exam.questions[S.exam.idx] === q) renderExam(); });
   app.innerHTML = `<div class="topbar"><div class="row" style="gap:10px;align-items:center;"><button class="ghost" id="exitExamBtn" style="padding:8px 12px;font-size:12px;min-height:auto;">← Back</button><div class="brand"><span class="dot"></span>Set ${set.set_number||''} ${set.category?('· '+set.category.replace('_',' ')):''}</div></div><span class="timer" id="examTimer">${fmtTime(S.exam.totalSec-S.exam.elapsedAtLoad)}</span></div>
   <div class="exam-shell">
     <div class="exam-main">
       <div class="qmeta">Question ${idx+1} of ${questions.length}</div>
-      <div style="font-weight:600;font-size:18.5px;line-height:1.55;">${richBlock(q.q_text, q.image_url)}</div>
+      <div style="font-weight:600;font-size:18.5px;line-height:1.55;">${q.image_url===undefined && q._imgFetching ? '<div class="muted" style="font-size:12px;margin-bottom:8px;">Loading image…</div>' : ''}${richBlock(q.q_text, q.image_url)}</div>
       <div id="opts"></div>
       <div class="row" style="margin-top:16px;">
         <button class="subtle" id="prevQ" ${idx===0?'disabled':''}>◀ Prev</button>
@@ -870,12 +884,13 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
   }
   i = Math.max(0, Math.min(i, questions.length-1));
   const q = questions[i]; const a = att.answers[q.id];
+  ensureQuestionImage(q, ()=>{ if(S.review && S.review.questions[S.review.questions.indexOf(q)]===q) renderReview(withExpl, i, wrongOnly); });
   const { data: existingCat } = await sb.from('categorizations').select('category').eq('user_id', S.profile.id).eq('question_id', q.id).maybeSingle();
   app.innerHTML = `<div class="topbar"><div class="brand"><span class="dot"></span>Review ${i+1}/${questions.length} ${wrongOnly?'· wrong only':''}</div><button class="ghost" id="closeRev" style="padding:8px 12px;font-size:12px;">Close</button></div>
   <div class="container">
     <div class="reviewcard" id="revCapture">
       <div class="qmeta">Question ${i+1}</div>
-      <div style="font-weight:600;font-size:18.5px;line-height:1.55;">${richBlock(q.q_text, q.image_url)}</div>
+      <div style="font-weight:600;font-size:18.5px;line-height:1.55;">${q.image_url===undefined && q._imgFetching ? '<div class="muted" style="font-size:12px;margin-bottom:8px;">Loading image…</div>' : ''}${richBlock(q.q_text, q.image_url)}</div>
       <div id="revOpts"></div>
       ${withExpl?`<div class="divider"></div><div><b>Explanation</b>${renderRichText(q.explanation||'No explanation provided.')}</div>`:''}
     </div>
@@ -1241,7 +1256,7 @@ async function generateSetsForFolder(folder){
   if(!type || !EXAM_CONFIG[type]) return 0;
   const cfg = EXAM_CONFIG[type];
   await sb.from('sets').delete().eq('folder_id', folder.id).is('user_id', null);
-  const { data: qs } = await sb.from('questions').select('*').eq('folder_id', folder.id).order('order_index');
+  const { data: qs } = await sb.from('questions').select('id, subject').eq('folder_id', folder.id).order('order_index');
   let setsToInsert = [];
   if(type==='subjectwise'){
     const bySubject={};
