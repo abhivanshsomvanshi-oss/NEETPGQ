@@ -458,7 +458,7 @@ async function renderUser(){
     <div class="tab ${S.utab==='stats'?'on':''}" data-t="stats">Today's stats</div>
     <div class="tab ${S.utab==='decks'?'on':''}" data-t="decks">Category decks</div>
     <div class="tab ${S.utab==='sub'?'on':''}" data-t="sub">Subscription</div>
-  </div><div id="utabBody"></div>`;
+  </div><div id="utabBody"><div class="muted" style="padding:20px 0;">Loading…</div></div>`;
   wrap.querySelectorAll('.tab[data-t]').forEach(t=>t.onclick=()=>{ if(t.dataset.t===S.utab) return; goTo({utab:t.dataset.t, nav:{}}); });
 
   if(!isActive){
@@ -488,6 +488,7 @@ async function loadQbanksNav(isActive){
 }
 async function loadQbankList(isActive){
   const body=document.getElementById('utabBody');
+  body.innerHTML = '';
   const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
   if(!qbanks || !qbanks.length){ body.innerHTML += `<div class="card muted">No qbanks published yet.</div>`; return; }
   // Fire all section-count queries in parallel instead of one-by-one —
@@ -506,6 +507,7 @@ async function loadQbankList(isActive){
 }
 async function loadFolderList(isActive){
   const body=document.getElementById('utabBody');
+  body.innerHTML = '';
   const { data: qb } = await sb.from('qbanks').select('*').eq('id', S.nav.qbankId).maybeSingle();
   body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank'}]);
   const { data: folders } = await sb.from('folders').select('*').eq('qbank_id', S.nav.qbankId).order('name');
@@ -539,6 +541,7 @@ async function loadFolderList(isActive){
 }
 async function loadFolderSets(isActive){
   const body=document.getElementById('utabBody');
+  body.innerHTML = '';
   const { data: qb } = await sb.from('qbanks').select('*').eq('id', S.nav.qbankId).maybeSingle();
   const { data: folder } = await sb.from('folders').select('*').eq('id', S.nav.folderId).maybeSingle();
   body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank', onClick:true},{label:folder?.name||'Section'}]);
@@ -639,34 +642,77 @@ async function loadFullTestReview(folderId){
 
 async function loadStatsTab(){
   const body=document.getElementById('utabBody');
+  body.innerHTML = '';
   const start = new Date(); start.setHours(0,0,0,0);
-  const { data: attempts } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('status','submitted').gte('submitted_at', start.toISOString());
-  let total=0, corrCount=0, wrongCount=0;
-  for(const a of (attempts||[])){
-    const qids=Object.keys(a.answers||{}).filter(k=>['answered','answered_marked'].includes(a.answers[k].status));
-    if(!qids.length) continue;
-    total += qids.length;
-    const { data: qs } = await sb.from('questions').select('id, correct_index').in('id', qids);
-    qs.forEach(q=>{ const sel=a.answers[q.id].selected; if(sel===q.correct_index) corrCount++; else wrongCount++; });
+  const weekStart = new Date(start); weekStart.setDate(weekStart.getDate()-6);
+
+  // One query covers both "today" and the 7-day daily breakdown, using the
+  // correct_count/total_questions already stored on each attempt at submit
+  // time — no more per-attempt "look up every question again" loop, which
+  // was what made this tab slow to open.
+  const [{ data: weekAttempts }, pctRes] = await Promise.all([
+    sb.from('attempts').select('correct_count, total_questions, submitted_at')
+      .eq('user_id', S.profile.id).eq('status','submitted').gte('submitted_at', weekStart.toISOString()),
+    sb.rpc('get_today_percentile'),
+  ]);
+  const pct = pctRes.data && pctRes.data[0];
+
+  const todayKey = start.toLocaleDateString('en-CA');
+  const byDay = {};
+  (weekAttempts||[]).forEach(a=>{
+    const key = new Date(a.submitted_at).toLocaleDateString('en-CA');
+    byDay[key] = byDay[key] || {attempted:0, correct:0};
+    byDay[key].attempted += (a.total_questions||0);
+    byDay[key].correct += (a.correct_count||0);
+  });
+  const today = byDay[todayKey] || {attempted:0, correct:0};
+  const total = today.attempted, corrCount = today.correct, wrongCount = total - corrCount;
+
+  let percentileHtml = '';
+  if(pct && pct.percentile != null){
+    percentileHtml = `<div class="muted" style="margin-top:10px;">You're doing better than <b style="color:var(--text)">${pct.percentile}%</b> of the ${pct.users_compared} user${pct.users_compared===1?'':'s'} active today (your accuracy: ${Math.round(pct.my_accuracy)}%).</div>`;
+  } else if(total > 0){
+    percentileHtml = `<div class="muted" style="margin-top:10px;">Not enough other users active today yet to compare against.</div>`;
   }
+
+  const days = Object.keys(byDay).sort().reverse();
+  let dailyHtml = '';
+  if(days.length){
+    dailyHtml = `<div class="card"><h3>Daily stats (last 7 days)</h3>` + days.map(d=>{
+      const {attempted, correct} = byDay[d];
+      const acc = attempted ? Math.round(correct/attempted*100) : 0;
+      const label = d===todayKey ? 'Today' : new Date(d+'T00:00:00').toLocaleDateString('en-IN', {weekday:'short', day:'numeric', month:'short'});
+      return `<div class="qrow" style="cursor:default;"><div><b>${label}</b> · ${attempted} q attempted</div><div class="muted">${correct}/${attempted||1} correct (${acc}%)</div></div>`;
+    }).join('') + `</div>`;
+  }
+
   document.getElementById('utabBody').innerHTML += `<div class="card"><h3>Today</h3>
     <div class="row" style="gap:26px;">
       <div><div class="stat-big">${total}</div><div class="muted">Attempted</div></div>
       <div><div class="stat-big" style="color:var(--green)">${corrCount}</div><div class="muted">Correct</div></div>
       <div><div class="stat-big" style="color:var(--red)">${wrongCount}</div><div class="muted">Wrong</div></div>
-    </div></div>`;
+    </div>
+    ${percentileHtml}
+  </div>
+  ${dailyHtml}`;
 }
 
 async function loadDecksTab(){
   const body=document.getElementById('utabBody');
+  body.innerHTML = '';
   const { data: cats } = await sb.from('categorizations').select('*, questions(folder_id)').eq('user_id', S.profile.id);
   if(!cats || !cats.length){ body.innerHTML += `<div class="card muted">No tagged questions yet. Categorise wrong answers during review to build decks here.</div>`; return; }
   const byFolder={};
   cats.forEach(c=>{ const fid=c.questions.folder_id; byFolder[fid]=byFolder[fid]||{}; (byFolder[fid][c.category]=byFolder[fid][c.category]||[]).push(c.question_id); });
+  // Batch-fetch every folder name in one round trip instead of one query
+  // per folder in a loop — that sequential loop was the lag source here.
+  const fids = Object.keys(byFolder);
+  const { data: folderRows } = await sb.from('folders').select('id, name').in('id', fids);
+  const folderNameById = {};
+  (folderRows||[]).forEach(f=>{ folderNameById[f.id] = f.name; });
   let html='';
-  for(const fid in byFolder){
-    const { data: folder } = await sb.from('folders').select('name').eq('id', fid).maybeSingle();
-    html += `<div class="card"><h3>${folder?.name||'Section'}</h3>`;
+  for(const fid of fids){
+    html += `<div class="card"><h3>${folderNameById[fid]||'Section'}</h3>`;
     for(const cat of CATS){
       const ids = byFolder[fid][cat.key];
       if(!ids || !ids.length) continue;
@@ -699,6 +745,7 @@ async function startCategoryDeck(folderId, category){
 
 async function loadSubTab(){
   const body=document.getElementById('utabBody');
+  body.innerHTML = '';
   const { data: plans } = await sb.from('plans').select('*').order('display_order');
   let html = `<div class="card"><h3>Your account</h3>
     <p>Status: <span class="badge ${S.profile.status}">${S.profile.status}</span></p>
