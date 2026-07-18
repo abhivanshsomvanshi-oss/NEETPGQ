@@ -668,23 +668,28 @@ async function loadStatsTab(){
   const today = byDay[todayKey] || {attempted:0, correct:0};
   const total = today.attempted, corrCount = today.correct, wrongCount = total - corrCount;
 
-  let percentileHtml = '';
+  let percentileHtml;
   if(pct && pct.percentile != null){
     percentileHtml = `<div class="muted" style="margin-top:10px;">You're doing better than <b style="color:var(--text)">${pct.percentile}%</b> of the ${pct.users_compared} user${pct.users_compared===1?'':'s'} active today (your accuracy: ${Math.round(pct.my_accuracy)}%).</div>`;
   } else if(total > 0){
     percentileHtml = `<div class="muted" style="margin-top:10px;">Not enough other users active today yet to compare against.</div>`;
+  } else {
+    percentileHtml = `<div class="muted" style="margin-top:10px;">Attempt some questions today to see how you compare with others.</div>`;
   }
 
   const days = Object.keys(byDay).sort().reverse();
-  let dailyHtml = '';
+  let dailyHtml = `<div class="card"><h3>Daily stats (last 7 days)</h3>`;
   if(days.length){
-    dailyHtml = `<div class="card"><h3>Daily stats (last 7 days)</h3>` + days.map(d=>{
+    dailyHtml += days.map(d=>{
       const {attempted, correct} = byDay[d];
       const acc = attempted ? Math.round(correct/attempted*100) : 0;
       const label = d===todayKey ? 'Today' : new Date(d+'T00:00:00').toLocaleDateString('en-IN', {weekday:'short', day:'numeric', month:'short'});
       return `<div class="qrow" style="cursor:default;"><div><b>${label}</b> · ${attempted} q attempted</div><div class="muted">${correct}/${attempted||1} correct (${acc}%)</div></div>`;
-    }).join('') + `</div>`;
+    }).join('');
+  } else {
+    dailyHtml += `<div class="muted">No attempts in the last 7 days yet — this fills in as you complete sets.</div>`;
   }
+  dailyHtml += `</div>`;
 
   document.getElementById('utabBody').innerHTML += `<div class="card"><h3>Today</h3>
     <div class="row" style="gap:26px;">
