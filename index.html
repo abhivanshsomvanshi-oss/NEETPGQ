@@ -16,51 +16,62 @@
   --text:#EAEDF5; --text-dim:#9AA5BD; --text-inv:#141B2E;
   --amber:#E8A33D; --amber-dim:#4A3A1E;
   --gray:#8A93A6; --red:#E5484D; --green:#2FA36B; --purple:#8B5CF6;
-  --radius:14px;
+  --radius:16px;
   --display:'Space Grotesk',sans-serif; --body:'Inter',sans-serif; --mono:'IBM Plex Mono',monospace;
+  --shadow:0 4px 18px rgba(0,0,0,.28);
+  --bg-image:radial-gradient(circle at 12% 0%, #16223d 0%, transparent 45%),radial-gradient(circle at 100% 10%, #1a2540 0%, transparent 40%),var(--bg);
+}
+html.light{
+  --bg:#F4F1E8; --surface:#FFFFFF; --surface-2:#F0EEE3; --border:#DFDACB;
+  --text:#241F14; --text-dim:#6B6455; --text-inv:#FFFFFF;
+  --amber:#B9791F; --amber-dim:#F3E3C4;
+  --gray:#B7AF9D; --shadow:0 4px 16px rgba(80,60,20,.10);
+  --bg-image:radial-gradient(circle at 10% 0%, #FBF7ED 0%, transparent 45%),radial-gradient(circle at 100% 0%, #F1E9D2 0%, transparent 45%),var(--bg);
 }
 *{box-sizing:border-box;}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--body);height:100%;}
+html,body{margin:0;padding:0;background:var(--bg-image);background-attachment:fixed;color:var(--text);font-family:var(--body);height:100%;font-size:16.5px;-webkit-font-smoothing:antialiased;}
 #app{min-height:100vh;display:flex;flex-direction:column;}
 a{color:var(--amber);}
-h1,h2,h3{font-family:var(--display);margin:0 0 8px;}
-button{font-family:var(--body);cursor:pointer;border:none;border-radius:12px;padding:13px 20px;font-weight:600;font-size:14.5px;transition:transform .08s ease, opacity .15s, box-shadow .15s;min-height:44px;}
+h1,h2,h3{font-family:var(--display);margin:0 0 8px;letter-spacing:.01em;}
+h2{font-size:22px;} h3{font-size:18px;}
+button{font-family:var(--body);cursor:pointer;border:none;border-radius:12px;padding:13px 20px;font-weight:600;font-size:15.5px;transition:transform .08s ease, opacity .15s, box-shadow .15s;min-height:46px;}
 button:active{transform:scale(.96);}
-button.primary{background:var(--amber);color:#241a06;box-shadow:0 3px 10px rgba(232,163,61,.25);}
-button.primary:hover{box-shadow:0 4px 14px rgba(232,163,61,.4);}
+button.primary{background:linear-gradient(135deg,var(--amber),#f0b45a);color:#241a06;box-shadow:0 3px 12px rgba(232,163,61,.3);}
+button.primary:hover{box-shadow:0 5px 16px rgba(232,163,61,.45);}
 button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);}
 button.danger{background:var(--red);color:#fff;box-shadow:0 3px 10px rgba(229,72,77,.25);}
-button.subtle{background:var(--surface-2);color:var(--text);}
+button.subtle{background:var(--surface-2);color:var(--text);border:1px solid var(--border);}
 button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
-input,select,textarea{font-family:var(--body);background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:15px;width:100%;min-height:44px;}
-label{font-size:12px;color:var(--text-dim);display:block;margin:10px 0 5px;text-transform:uppercase;letter-spacing:.04em;}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(11,18,32,.92);backdrop-filter:blur(8px);z-index:50;}
-.brand{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:.01em;display:flex;align-items:center;gap:8px;}
-.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber);}
+button.iconbtn{padding:8px 12px;font-size:16px;min-height:auto;border-radius:10px;}
+input,select,textarea{font-family:var(--body);background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:10px;font-size:16px;width:100%;min-height:46px;}
+label{font-size:12.5px;color:var(--text-dim);display:block;margin:11px 0 5px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);backdrop-filter:blur(8px);z-index:50;box-shadow:var(--shadow);}
+.brand{font-family:var(--display);font-weight:700;font-size:20.5px;letter-spacing:.01em;display:flex;align-items:center;gap:8px;}
+.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber);}
 .container{max-width:960px;margin:0 auto;padding:24px 18px 90px;width:100%;flex:1;}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
-.badge{display:inline-block;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:16px;box-shadow:var(--shadow);}
+.badge{display:inline-block;padding:4px 11px;border-radius:100px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
 .badge.active{background:#16321f;color:var(--green);}
 .badge.pending{background:#332a12;color:var(--amber);}
 .badge.revoked{background:#3a1417;color:var(--red);}
 .badge.unset{background:#3a2a12;color:var(--text-dim);}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
-.muted{color:var(--text-dim);font-size:13px;}
+.muted{color:var(--text-dim);font-size:14px;}
 .tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto;}
-.tab{padding:13px 16px;font-size:14px;font-weight:600;color:var(--text-dim);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer;min-height:44px;display:flex;align-items:center;}
+.tab{padding:13px 16px;font-size:15px;font-weight:600;color:var(--text-dim);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer;min-height:46px;display:flex;align-items:center;}
 .tab.on{color:var(--amber);border-color:var(--amber);}
-.crumbs{font-size:12px;color:var(--text-dim);margin-bottom:12px;}
+.crumbs{font-size:13px;color:var(--text-dim);margin-bottom:12px;}
 .crumbs span{cursor:pointer;color:var(--amber);}
-.qrow{display:flex;justify-content:space-between;align-items:center;padding:16px;background:var(--surface-2);border-radius:12px;margin-bottom:9px;cursor:pointer;transition:background .15s;}
-.qrow:hover{background:#212c45;}
+.qrow{display:flex;justify-content:space-between;align-items:center;padding:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;cursor:pointer;transition:background .15s, transform .1s;}
+.qrow:hover{background:var(--amber-dim);}
 .lockicon{opacity:.6;font-size:15px;}
 .exam-shell{display:grid;grid-template-columns:1fr 260px;gap:0;flex:1;}
 @media(max-width:760px){.exam-shell{grid-template-columns:1fr;}}
 .exam-main{padding:20px;overflow-y:auto;}
 .exam-side{background:var(--surface);border-left:1px solid var(--border);padding:16px;}
-.timer{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--amber);letter-spacing:.03em;background:var(--amber-dim);padding:8px 14px;border-radius:10px;display:inline-block;}
-.opt{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;font-size:17px;line-height:1.5;transition:border-color .15s, background .15s;}
+.timer{font-family:var(--mono);font-size:27px;font-weight:600;color:var(--amber);letter-spacing:.03em;background:var(--amber-dim);padding:8px 14px;border-radius:10px;display:inline-block;}
+.opt{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;font-size:18px;line-height:1.5;transition:border-color .15s, background .15s;}
 .opt:hover{border-color:var(--amber-dim);}
 .opt.sel{border-color:var(--amber);background:#241d0d;}
 .opt.correct{border-color:var(--green);background:#0f2a1c;}
@@ -84,21 +95,33 @@ label{font-size:12px;color:var(--text-dim);display:block;margin:10px 0 5px;text-
 .overlay{position:fixed;inset:0;background:rgba(11,18,32,.85);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;max-width:440px;width:100%;max-height:86vh;overflow-y:auto;}
 .locked-banner{background:linear-gradient(120deg,#332a12,#241d0d);border:1px solid var(--amber-dim);border-radius:var(--radius);padding:18px;margin-bottom:16px;}
-table.rt{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0;}
-table.rt th,table.rt td{text-align:left;padding:8px 6px;border:1px solid var(--border);}
-table.rt th{color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;}
+table.rt{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0;}
+table.rt th,table.rt td{text-align:left;padding:9px 7px;border:1px solid var(--border);}
+table.rt th{color:var(--text-dim);font-weight:600;font-size:12px;text-transform:uppercase;}
 .reviewcard table.rt th,.reviewcard table.rt td{border-color:var(--border);}
-table{width:100%;border-collapse:collapse;font-size:13px;}
-th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);}
-th{color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--border);padding:10px 18px;border-radius:100px;font-size:13px;z-index:300;}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+th,td{text-align:left;padding:9px 7px;border-bottom:1px solid var(--border);}
+th{color:var(--text-dim);font-weight:600;font-size:12px;text-transform:uppercase;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--border);padding:11px 19px;border-radius:100px;font-size:14px;z-index:300;box-shadow:var(--shadow);}
 .spinner{width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite;margin:30px auto;}
 @keyframes spin{to{transform:rotate(360deg);}}
-.qmeta{font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-bottom:6px;}
-.stat-big{font-family:var(--mono);font-size:30px;font-weight:600;}
+.qmeta{font-family:var(--mono);font-size:13px;color:var(--text-dim);margin-bottom:6px;}
+.stat-big{font-family:var(--mono);font-size:32px;font-weight:600;}
 .divider{height:1px;background:var(--border);margin:16px 0;}
 .qimg{max-width:100%;border-radius:10px;margin:10px 0;display:block;background:var(--surface-2);min-height:60px;}
 .filepick{border:1px dashed var(--border);border-radius:10px;padding:14px;margin-top:6px;}
+.themebtn{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:9px 12px;font-size:17px;min-height:auto;line-height:1;}
+.ranktbl{width:100%;border-collapse:collapse;font-size:14px;margin-top:10px;}
+.ranktbl th,.ranktbl td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:left;}
+.ranktbl th{color:var(--text-dim);font-size:11.5px;text-transform:uppercase;}
+.ranktbl tr.me{background:var(--amber-dim);}
+.scopebtn{background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:13.5px;font-weight:600;min-height:auto;}
+.scopebtn.on{background:var(--amber);color:#241a06;border-color:var(--amber);}
+@media print{
+  body *{visibility:hidden;}
+  #printArea, #printArea *{visibility:visible;}
+  #printArea{position:absolute;left:0;top:0;width:100%;}
+}
 </style>
 </head>
 <body>
@@ -191,6 +214,19 @@ function detectPlatformName(name){
 }
 
 let S = { session:null, profile:null, deviceId:null, view:'loading', nav:{} };
+
+// ---------- theme (dark / light) ----------
+function applyTheme(){
+  const t = localStorage.getItem('qb_theme') || 'dark';
+  document.documentElement.classList.toggle('light', t==='light');
+}
+function toggleTheme(){
+  const cur = localStorage.getItem('qb_theme') || 'dark';
+  localStorage.setItem('qb_theme', cur==='dark' ? 'light' : 'dark');
+  applyTheme();
+  render();
+}
+applyTheme();
 
 // ---------- in-app back navigation ----------
 // The app never changes the URL, so by default the phone's/browser's back
@@ -398,9 +434,13 @@ function render(){
 }
 
 function topbar(title, right=''){
-  return `<div class="topbar"><div class="brand"><span class="dot"></span>${title}</div><div class="row">${right}<button class="ghost" id="signoutBtn" style="padding:8px 12px;font-size:12px;">Sign out</button></div></div>`;
+  const isLight = document.documentElement.classList.contains('light');
+  return `<div class="topbar"><div class="brand"><span class="dot"></span>${title}</div><div class="row">${right}<button class="themebtn" id="themeBtn" title="Toggle dark/light">${isLight?'🌙':'☀️'}</button><button class="ghost" id="signoutBtn" style="padding:8px 12px;font-size:13px;">Sign out</button></div></div>`;
 }
-function bindTopbar(){ const b=document.getElementById('signoutBtn'); if(b) b.onclick=signOut; }
+function bindTopbar(){
+  const b=document.getElementById('signoutBtn'); if(b) b.onclick=signOut;
+  const tb=document.getElementById('themeBtn'); if(tb) tb.onclick=toggleTheme;
+}
 async function signOut(){ await sb.auth.signOut(); S.profile=null; S.deviceBlocked=false; render(); }
 
 // ================= AUTH =================
@@ -408,6 +448,7 @@ function renderAuth(){
   S.authMode = S.authMode || 'login';
   app.innerHTML = `
   <div class="container" style="max-width:420px;padding-top:14vh;">
+    <div class="row" style="justify-content:flex-end;"><button class="themebtn" id="themeBtn">${document.documentElement.classList.contains('light')?'🌙':'☀️'}</button></div>
     <div style="text-align:center;margin-bottom:22px;">
       <div class="brand" style="justify-content:center;font-size:24px;"><span class="dot"></span>QBank Console</div>
       <p class="muted">CBT-style practice for NEET PG / INICET</p>
@@ -424,6 +465,7 @@ function renderAuth(){
     </div>
   </div>`;
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{S.authMode=t.dataset.m; renderAuth();});
+  document.getElementById('themeBtn').onclick = toggleTheme;
   document.getElementById('authGo').onclick = async ()=>{
     const email=document.getElementById('email').value.trim();
     const password=document.getElementById('pass').value;
@@ -559,12 +601,30 @@ async function loadFolderSets(isActive){
       for(const s of bySubject[subj]) html += await setRow(s, isActive);
     }
   } else {
-    let allDone = true;
+    let allDone = true, anyDone = false;
     for(const s of sets){
       const locked = EXAM_CONFIG[folder.exam_type].sequential && s.set_number>1 ? await isLocked(folder.id, s.set_number) : false;
       html += await setRow(s, isActive, locked);
       const { data: doneAtt } = await sb.from('attempts').select('id').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').maybeSingle();
-      if(!doneAtt) allDone = false;
+      if(doneAtt) anyDone = true; else allDone = false;
+    }
+    // Whole-section total: counts every subsection's score/correct/total
+    // together in one go (not one set at a time), so you see the overall
+    // percentage and where you rank against everyone else on this section,
+    // as soon as you've submitted at least one subsection here.
+    if(anyDone){
+      const { data: fstats, error: fErr } = await sb.rpc('folder_rank_stats', { p_folder_id: folder.id, p_user_id: S.profile.id });
+      const frow = Array.isArray(fstats) ? fstats[0] : fstats;
+      if(frow && frow.user_total){
+        const fpct = Math.round((frow.user_correct/frow.user_total)*1000)/10;
+        html += `<div class="card" style="margin-top:14px;">
+          <h3>Section total (all ${frow.sets_total} subsections)</h3>
+          <div class="muted">✅ ${frow.user_correct}/${frow.user_total} correct (${fpct}%) · score ${frow.user_score>0?'+':''}${frow.user_score} · ${frow.sets_completed}/${frow.sets_total} subsections done</div>
+          <div class="muted" style="margin-top:4px;">${frow.rank ? `Rank ${frow.rank}/${frow.total_attempts} · ${frow.percentile}ᵗʰ percentile` : 'Not enough other users\' totals yet to rank against.'}</div>
+        </div>`;
+      } else if(fErr){
+        html += `<div class="card muted" style="margin-top:14px;">Section total isn't available yet — ask admin to run the ranking database update.</div>`;
+      }
     }
     if(allDone && sets.length){
       html += `<div class="row" style="margin-top:8px;"><button class="subtle" id="fullTestBtn">📊 Review full test (all sections)</button></div>`;
@@ -588,10 +648,15 @@ async function setRow(s, isActive, locked=false){
   if(att){
     const { data: stats } = await sb.rpc('set_rank_stats', { p_set_id: s.id, p_user_id: S.profile.id });
     const row = Array.isArray(stats) ? stats[0] : stats;
-    const pct = row && row.user_total ? Math.round((row.user_correct/row.user_total)*1000)/10 : null;
-    statsHtml = `<div class="muted" style="font-size:11px;margin-top:3px;">
-      ✅ ${att.correct_count ?? '—'}/${att.total_questions ?? n} correct (${pct!=null?pct+'%':'—'}) · score ${att.score>0?'+':''}${att.score}
-      ${row && row.rank ? ` · rank ${row.rank}/${row.total_attempts} · ${row.percentile}ᵗʰ percentile` : ''}
+    // Percentage is always computed straight from this attempt's own
+    // correct/total — it no longer depends on the rank RPC returning data,
+    // so it still shows even when there's only one attempt so far (no one
+    // to rank/percentile against yet).
+    const totalQ = att.total_questions ?? n;
+    const pct = totalQ ? Math.round((att.correct_count||0)/totalQ*1000)/10 : null;
+    statsHtml = `<div class="muted" style="font-size:12px;margin-top:3px;">
+      ✅ ${att.correct_count ?? '—'}/${totalQ} correct (${pct!=null?pct+'%':'—'}) · score ${att.score>0?'+':''}${att.score}
+      ${row && row.rank ? ` · rank ${row.rank}/${row.total_attempts} · ${row.percentile}ᵗʰ percentile` : ' · percentile: not enough attempts yet to compare'}
     </div>`;
   }
   return `<div class="qrow" style="flex-direction:column;align-items:stretch;gap:6px;cursor:default;">
@@ -1026,6 +1091,7 @@ async function renderAdmin(){
     <div class="tab ${S.atab==='folders'?'on':''}" data-t="folders">Sections</div>
     <div class="tab ${S.atab==='users'?'on':''}" data-t="users">Users</div>
     <div class="tab ${S.atab==='plans'?'on':''}" data-t="plans">Plans</div>
+    <div class="tab ${S.atab==='rankings'?'on':''}" data-t="rankings">Rankings</div>
     <div class="tab ${S.atab==='attempt'?'on':''}" data-t="attempt">Practice (user view)</div>
   </div><div id="atabBody"></div>`;
   wrap.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ if(t.dataset.t===S.atab) return; goTo({atab:t.dataset.t}); });
@@ -1033,6 +1099,7 @@ async function renderAdmin(){
   if(S.atab==='folders') return adminFolders();
   if(S.atab==='users') return adminUsers();
   if(S.atab==='plans') return adminPlans();
+  if(S.atab==='rankings') return adminRankings();
   if(S.atab==='attempt'){ S.view='user'; S.nav={}; return renderUser(); }
 }
 
@@ -1328,9 +1395,14 @@ async function generateSetsForFolder(folder){
 async function adminUsers(){
   const body=document.getElementById('atabBody');
   const { data: users } = await sb.from('profiles').select('*').neq('role','admin').order('created_at',{ascending:false});
-  body.innerHTML = `<div class="card"><h3>Users</h3><table id="usersTbl"><tr><th>Email</th><th>Status</th><th>Expiry</th><th>Devices</th><th></th></tr>
+  body.innerHTML = `<div class="card"><h3>Users</h3>
+  <div class="muted" style="margin-bottom:8px;">Name / batch / college show up on every rank list under the Rankings tab.</div>
+  <div style="overflow-x:auto;"><table id="usersTbl"><tr><th>Email</th><th>Name</th><th>Batch</th><th>College</th><th>Status</th><th>Expiry</th><th>Devices</th><th></th></tr>
   ${(users||[]).map(u=>`<tr data-u="${u.id}">
     <td>${u.email}</td>
+    <td><input class="nameInput" value="${(u.name||'').replace(/"/g,'&quot;')}" placeholder="Full name" style="width:130px;"></td>
+    <td><input class="batchInput" value="${(u.batch||'').replace(/"/g,'&quot;')}" placeholder="e.g. 2024" style="width:90px;"></td>
+    <td><input class="collegeInput" value="${(u.college||'').replace(/"/g,'&quot;')}" placeholder="College" style="width:140px;"></td>
     <td><span class="badge ${u.status}">${u.status}</span></td>
     <td><input type="date" class="expInput" value="${u.subscription_expiry?u.subscription_expiry.slice(0,10):''}" style="width:140px;"></td>
     <td><input type="number" min="1" class="devInput" value="${u.device_limit}" style="width:60px;"></td>
@@ -1338,13 +1410,20 @@ async function adminUsers(){
       <button class="primary saveBtn" style="padding:6px 10px;font-size:12px;">Save</button>
       <button class="${u.status==='active'?'danger':'subtle'} toggleBtn" style="padding:6px 10px;font-size:12px;">${u.status==='active'?'Revoke':'Activate'}</button>
     </td></tr>`).join('')}
-  </table></div>`;
+  </table></div></div>`;
   body.querySelectorAll('tr[data-u]').forEach(tr=>{
     const uid=tr.dataset.u;
     tr.querySelector('.saveBtn').onclick=async ()=>{
       const exp=tr.querySelector('.expInput').value;
       const dev=+tr.querySelector('.devInput').value||1;
-      await sb.from('profiles').update({subscription_expiry: exp? new Date(exp).toISOString():null, device_limit:dev}).eq('id', uid);
+      const name=tr.querySelector('.nameInput').value.trim();
+      const batch=tr.querySelector('.batchInput').value.trim();
+      const college=tr.querySelector('.collegeInput').value.trim();
+      const { error } = await sb.from('profiles').update({
+        subscription_expiry: exp? new Date(exp).toISOString():null,
+        device_limit:dev, name, batch, college
+      }).eq('id', uid);
+      if(error){ toast('Save failed — '+error.message); return; }
       toast('Saved');
     };
     tr.querySelector('.toggleBtn').onclick=async ()=>{
@@ -1377,6 +1456,132 @@ async function adminPlans(){
     adminPlans();
   };
   body.querySelectorAll('.delBtn').forEach(b=>b.onclick=async ()=>{ await sb.from('plans').delete().eq('id', b.dataset.id); adminPlans(); });
+}
+
+// ================= ADMIN RANKINGS =================
+const EXAMTYPE_RANK_LABELS = {
+  auto_subsection: 'Grand Tests (GT)',
+  inicet: 'INICET',
+  neetpg: 'NEET PG',
+  updated_neetpg: 'Updated NEET PG',
+};
+async function adminRankings(){
+  const body=document.getElementById('atabBody');
+  const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
+  S.rankQb = S.rankQb || (qbanks && qbanks[0] && qbanks[0].id);
+  body.innerHTML = `
+  <div class="card">
+    <h3>Per set / per subject / per section</h3>
+    <label>QBank</label>
+    <select id="rkQb">${(qbanks||[]).map(qb=>`<option value="${qb.id}" ${qb.id===S.rankQb?'selected':''}>${qb.name}</option>`).join('')}</select>
+    <div id="rkFolderWrap" style="margin-top:10px;"></div>
+    <div id="rkSetsWrap" style="margin-top:10px;"></div>
+  </div>
+  <div class="card">
+    <h3>Exam-pattern totals (across every qbank)</h3>
+    <div class="row" id="rkExamBtns">
+      ${Object.entries(EXAMTYPE_RANK_LABELS).map(([k,label])=>`<button class="scopebtn" data-examtype="${k}">${label} total</button>`).join('')}
+    </div>
+  </div>
+  <div class="card">
+    <h3>Overall app total</h3>
+    <p class="muted">Every submitted attempt across every qbank, section and subject, added up per user.</p>
+    <button class="primary" id="rkOverallBtn">Load overall rank list</button>
+  </div>
+  <div id="rankResult"></div>`;
+  document.getElementById('rkQb').onchange = (e)=>{ S.rankQb = e.target.value; renderRankFolders(); };
+  document.querySelectorAll('[data-examtype]').forEach(b=>b.onclick=()=>{
+    loadRankList('examtype', { p_exam_type: b.dataset.examtype }, `${EXAMTYPE_RANK_LABELS[b.dataset.examtype]} — overall total`);
+  });
+  document.getElementById('rkOverallBtn').onclick = ()=>{
+    loadRankList('overall', {}, 'Overall app total');
+  };
+  await renderRankFolders();
+}
+async function renderRankFolders(){
+  const wrap = document.getElementById('rkFolderWrap');
+  const { data: folders } = await sb.from('folders').select('*').eq('qbank_id', S.rankQb).order('name');
+  if(!folders || !folders.length){ wrap.innerHTML = `<p class="muted">No sections in this qbank yet.</p>`; document.getElementById('rkSetsWrap').innerHTML=''; return; }
+  S.rankFolder = S.rankFolder && folders.some(f=>f.id===S.rankFolder) ? S.rankFolder : folders[0].id;
+  wrap.innerHTML = `<label>Section</label><select id="rkFolder">${folders.map(f=>`<option value="${f.id}" ${f.id===S.rankFolder?'selected':''}>${f.name}</option>`).join('')}</select>`;
+  document.getElementById('rkFolder').onchange = (e)=>{ S.rankFolder = e.target.value; renderRankSets(); };
+  await renderRankSets();
+}
+async function renderRankSets(){
+  const wrap = document.getElementById('rkSetsWrap');
+  const { data: folder } = await sb.from('folders').select('*').eq('id', S.rankFolder).maybeSingle();
+  const { data: sets } = await sb.from('sets').select('*').eq('folder_id', S.rankFolder).is('user_id', null).order('subject').order('set_number');
+  if(!folder || !sets || !sets.length){ wrap.innerHTML = `<p class="muted">No sets generated for this section yet.</p>`; return; }
+  let html = '';
+  if(folder.exam_type==='subjectwise'){
+    const bySubject={};
+    sets.forEach(s=>{ (bySubject[s.subject||'General']=bySubject[s.subject||'General']||[]).push(s); });
+    for(const subj in bySubject){
+      html += `<div style="margin:12px 0 6px;"><b>${subj}</b> <button class="scopebtn" data-subjtotal="${subj}" style="margin-left:8px;">Subject total</button></div>`;
+      bySubject[subj].forEach(s=>{ html += `<button class="scopebtn" data-setid="${s.id}" style="margin:3px 6px 3px 0;">Set ${s.set_number}</button>`; });
+    }
+  } else {
+    html += `<div style="margin:12px 0 6px;"><button class="scopebtn" data-foldertotal="${folder.id}">Section total (all subsections)</button></div>`;
+    sets.forEach(s=>{ html += `<button class="scopebtn" data-setid="${s.id}" style="margin:3px 6px 3px 0;">Set ${s.set_number}</button>`; });
+  }
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('[data-setid]').forEach(b=>b.onclick=()=>{
+    const s = sets.find(x=>x.id===b.dataset.setid);
+    loadRankList('set', { p_set_id: b.dataset.setid }, `${folder.name}${s?.subject?' — '+s.subject:''} — Set ${s?.set_number||''}`);
+  });
+  wrap.querySelectorAll('[data-subjtotal]').forEach(b=>b.onclick=()=>{
+    loadRankList('subject', { p_folder_id: folder.id, p_subject: b.dataset.subjtotal }, `${folder.name} — ${b.dataset.subjtotal} — subject total`);
+  });
+  const ft = wrap.querySelector('[data-foldertotal]');
+  if(ft) ft.onclick = ()=> loadRankList('folder', { p_folder_id: folder.id }, `${folder.name} — section total`);
+}
+async function loadRankList(scope, params, title){
+  const result = document.getElementById('rankResult');
+  result.innerHTML = `<div class="card muted">Loading…</div>`;
+  const rpcName = {
+    set:'admin_set_rank_list', subject:'admin_subject_rank_list',
+    folder:'admin_folder_rank_list', examtype:'admin_examtype_rank_list', overall:'admin_overall_rank_list'
+  }[scope];
+  const { data, error } = await sb.rpc(rpcName, params);
+  if(error){
+    result.innerHTML = `<div class="card"><h3>${title}</h3><p class="muted" style="color:var(--red);">Couldn't load this rank list — ${error.message}. Make sure the ranking SQL functions have been added in Supabase.</p></div>`;
+    return;
+  }
+  renderRankTable(data||[], title);
+}
+function renderRankTable(rows, title){
+  const result = document.getElementById('rankResult');
+  if(!rows.length){
+    result.innerHTML = `<div class="card"><h3>${title}</h3><p class="muted">No submitted attempts here yet.</p></div>`;
+    return;
+  }
+  const rowsHtml = rows.map(r=>{
+    const pct = r.total_questions ? Math.round((r.correct_count/r.total_questions)*1000)/10 : 0;
+    return `<tr><td>${r.rnk ?? ''}</td><td>${escapeHtml(r.name||'—')}</td><td>${escapeHtml(r.batch||'—')}</td><td>${escapeHtml(r.college||'—')}</td><td>${escapeHtml(r.email||'')}</td><td>${r.correct_count}/${r.total_questions}</td><td>${pct}%</td><td>${r.score>0?'+':''}${r.score}</td></tr>`;
+  }).join('');
+  result.innerHTML = `<div class="card">
+    <div class="row" style="justify-content:space-between;">
+      <h3>${title}</h3>
+      <button class="subtle" id="rkDownloadPdf">⬇️ Download PDF</button>
+    </div>
+    <div style="overflow-x:auto;"><table class="ranktbl"><tr><th>Rank</th><th>Name</th><th>Batch</th><th>College</th><th>Email</th><th>Correct</th><th>%</th><th>Score</th></tr>${rowsHtml}</table></div>
+  </div>
+  <div id="printArea" style="display:none;">
+    <h2 style="font-family:Arial;">${title}</h2>
+    <table style="width:100%;border-collapse:collapse;font-family:Arial;font-size:12px;">
+      <tr style="background:#eee;"><th style="border:1px solid #999;padding:6px;">Rank</th><th style="border:1px solid #999;padding:6px;">Name</th><th style="border:1px solid #999;padding:6px;">Batch</th><th style="border:1px solid #999;padding:6px;">College</th><th style="border:1px solid #999;padding:6px;">Email</th><th style="border:1px solid #999;padding:6px;">Correct</th><th style="border:1px solid #999;padding:6px;">%</th><th style="border:1px solid #999;padding:6px;">Score</th></tr>
+      ${rows.map(r=>{
+        const pct = r.total_questions ? Math.round((r.correct_count/r.total_questions)*1000)/10 : 0;
+        return `<tr><td style="border:1px solid #999;padding:6px;">${r.rnk ?? ''}</td><td style="border:1px solid #999;padding:6px;">${escapeHtml(r.name||'—')}</td><td style="border:1px solid #999;padding:6px;">${escapeHtml(r.batch||'—')}</td><td style="border:1px solid #999;padding:6px;">${escapeHtml(r.college||'—')}</td><td style="border:1px solid #999;padding:6px;">${escapeHtml(r.email||'')}</td><td style="border:1px solid #999;padding:6px;">${r.correct_count}/${r.total_questions}</td><td style="border:1px solid #999;padding:6px;">${pct}%</td><td style="border:1px solid #999;padding:6px;">${r.score>0?'+':''}${r.score}</td></tr>`;
+      }).join('')}
+    </table>
+  </div>`;
+  document.getElementById('rkDownloadPdf').onclick = ()=>{
+    // Prints just #printArea (see the @media print rule) — the browser's
+    // print dialog has a "Save as PDF" destination on every platform, so
+    // this hands the admin a real downloadable PDF without any extra library.
+    window.print();
+  };
 }
 
 boot();
