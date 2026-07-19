@@ -189,6 +189,16 @@ const CATS = [
   {key:'concept_unknown', label:'Concept unknown'},
   {key:'silly_mistake', label:'Silly mistake'},
 ];
+// Groups a folder's name into a coarse bucket for filtering/browsing:
+// "Anatomy - Abdomen & Pelvis" -> "Anatomy" (splits on " - ");
+// "GT1", "PYQ 2023", "INICET Set 3" -> "GT" / "PYQ" / "INICET" (leading
+// non-numeric word). Used by the Sections nav filter, the admin checklist,
+// and the custom-test builder's Subject-wise/PYQ/GT source picker.
+function folderGroupOf(name){
+  if(name.includes(' - ')) return name.split(' - ')[0].trim();
+  const m = name.match(/^[^\d]+/);
+  return (m ? m[0] : name).trim() || name;
+}
 const EXAM_CONFIG = {
   subjectwise:  {label:'Subject-wise', perSet:50, minutesPerFull:45, sequential:false},
   inicet:       {label:'INICET pattern',        perSet:50, minutesPerFull:45, sequential:true},
@@ -544,6 +554,7 @@ async function renderUser(){
     <div class="tab ${S.utab==='qbanks'?'on':''}" data-t="qbanks">QBanks</div>
     <div class="tab ${S.utab==='stats'?'on':''}" data-t="stats">Today's stats</div>
     <div class="tab ${S.utab==='decks'?'on':''}" data-t="decks">Category decks</div>
+    <div class="tab ${S.utab==='custom'?'on':''}" data-t="custom">Custom test</div>
     <div class="tab ${S.utab==='sub'?'on':''}" data-t="sub">Subscription</div>
   </div><div id="utabBody"><div class="muted" style="padding:20px 0;">Loading…</div></div>`;
   wrap.querySelectorAll('.tab[data-t]').forEach(t=>t.onclick=()=>{ if(t.dataset.t===S.utab) return; goTo({utab:t.dataset.t, nav:{}}); });
@@ -557,6 +568,7 @@ async function renderUser(){
   if(S.utab==='qbanks') return loadQbanksNav(isActive);
   if(S.utab==='stats') return loadStatsTab();
   if(S.utab==='decks') return loadDecksTab();
+  if(S.utab==='custom') return loadCustomTab(isActive);
   if(S.utab==='sub') return loadSubTab();
 }
 
@@ -604,27 +616,55 @@ async function loadFolderList(isActive){
   const counts = await Promise.all((folders||[]).map(f=>
     sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', f.id)
   ));
-  let html = '';
-  (folders||[]).forEach((f,i)=>{
-    const count = counts[i].count;
-    const cfg = EXAM_CONFIG[f.exam_type];
-    html += `<div class="qrow" data-folder="${f.id}">
-      <div><b>${f.name}</b> · ${count||0} questions</div>
-      <span class="badge ${cfg?'active':'unset'}">${cfg?cfg.label:'Not configured'}</span>
+  (folders||[]).forEach((f,i)=>{ f._count = counts[i].count; });
+
+  // Group folders by their name's prefix — "Anatomy - Abdomen & Pelvis" groups
+  // under "Anatomy"; a name with no " - " (GT1, PYQ 2023, INICET Set 3, ...)
+  // groups under its leading non-numeric word (GT, PYQ, INICET). This turns a
+  // flat wall of 260+ sections into a pickable dropdown without touching how
+  // sections/sets are stored.
+  function groupOf(name){ return folderGroupOf(name); }
+  const groups = [...new Set((folders||[]).map(f=>groupOf(f.name)))].sort();
+
+  function renderList(filterGroup){
+    let html = `<div class="row" style="margin-bottom:14px;">
+      <select id="folderGroupSel" style="max-width:280px;">
+        <option value="__all__">All sections (${(folders||[]).length})</option>
+        ${groups.map(g=>{
+          const n = (folders||[]).filter(f=>groupOf(f.name)===g).length;
+          return `<option value="${g}" ${g===filterGroup?'selected':''}>${g} (${n})</option>`;
+        }).join('')}
+      </select>
     </div>`;
-  });
-  if(!html) html = `<div class="card muted">No sections in this qbank yet.</div>`;
-  document.getElementById('utabBody').innerHTML += html;
+    const visible = (folders||[]).filter(f=> filterGroup==='__all__' || groupOf(f.name)===filterGroup);
+    if(!visible.length){
+      html += `<div class="card muted">No sections in this group.</div>`;
+    } else {
+      visible.forEach(f=>{
+        const cfg = EXAM_CONFIG[f.exam_type];
+        html += `<div class="qrow" data-folder="${f.id}">
+          <div><b>${f.name}</b> · ${f._count||0} questions</div>
+          <span class="badge ${cfg?'active':'unset'}">${cfg?cfg.label:'Not configured'}</span>
+        </div>`;
+      });
+    }
+    const listArea = document.getElementById('folderListArea');
+    listArea.innerHTML = html;
+    document.getElementById('folderGroupSel').onchange = (e)=> renderList(e.target.value);
+    document.querySelectorAll('[data-folder]').forEach(el=>{
+      el.onclick = async ()=>{
+        const fid = el.dataset.folder;
+        const { data: f } = await sb.from('folders').select('*').eq('id', fid).maybeSingle();
+        if(!f.exam_type){ toast('Admin has not configured this section yet'); return; }
+        goTo({nav:{...S.nav, folderId: fid}});
+      };
+    });
+  }
+
+  document.getElementById('utabBody').innerHTML += `<div id="folderListArea"></div>`;
+  renderList(groups.length===1 ? groups[0] : '__all__');
   const crumb = document.querySelector('[data-crumb="0"]');
   if(crumb) crumb.onclick = ()=>{ goTo({nav:{}}); };
-  document.querySelectorAll('[data-folder]').forEach(el=>{
-    el.onclick = async ()=>{
-      const fid = el.dataset.folder;
-      const { data: f } = await sb.from('folders').select('*').eq('id', fid).maybeSingle();
-      if(!f.exam_type){ toast('Admin has not configured this section yet'); return; }
-      goTo({nav:{...S.nav, folderId: fid}});
-    };
-  });
 }
 async function loadFolderSets(isActive){
   const body=document.getElementById('utabBody');
@@ -858,6 +898,245 @@ async function startCategoryDeck(folderId, category){
   startAttempt(setRowData.id);
 }
 
+// ================= CUSTOM TEST BUILDER =================
+// Lets a student assemble their own 50q/45min set from a filtered pool
+// (platform, subject-wise/PYQ/GT/all, difficulty by community accuracy,
+// and their own mistake-category tags), and share it with a short code that
+// only other active users can redeem. See generateSetsForFolder's chunking
+// for where the "leftover chunk gets 0.9 min/question" rule is mirrored here.
+async function loadCustomTab(isActive){
+  const body = document.getElementById('utabBody');
+  if(!isActive){ return; }
+  body.innerHTML = '';
+  const { data: qbanks } = await sb.from('qbanks').select('*').order('name');
+  if(!qbanks || !qbanks.length){ body.innerHTML = `<div class="card muted">No qbanks yet.</div>`; return; }
+
+  body.innerHTML = `
+  <div class="card">
+    <h3>Build your own set</h3>
+    <p class="muted">Pulls from whichever platform/section combo you pick below, filtered the way you want. Every regenerate with the same options gives you fresh questions — never a repeat of a set you already made this way.</p>
+    <label>Platform</label>
+    <select id="ctPlatform">${qbanks.map(q=>`<option value="${q.id}">${q.name}</option>`).join('')}</select>
+    <label>Question source</label>
+    <select id="ctSource">
+      <option value="all">All (subject-wise + PYQ + GT + everything)</option>
+      <option value="subjectwise">Subject-wise / topic-wise</option>
+      <option value="pyq">PYQ</option>
+      <option value="gt">GT</option>
+    </select>
+    <label>Difficulty (based on how everyone else has scored on it)</label>
+    <select id="ctDifficulty">
+      <option value="all">All</option>
+      <option value="hard">Hard — most people got it wrong</option>
+      <option value="medium">Medium</option>
+      <option value="easy">Easy — most people got it right</option>
+    </select>
+    <label>Your mistake-category tags</label>
+    <select id="ctCategory">
+      <option value="all">All (tagged or not, doesn't matter)</option>
+      <option value="none">None — only questions I haven't tagged</option>
+      ${CATS.map(c=>`<option value="${c.key}">${c.label} only</option>`).join('')}
+    </select>
+    <button class="primary" id="ctBuild" style="margin-top:16px;">Create my set (50 q / 45 min)</button>
+    <div id="ctStatus" class="muted" style="margin-top:10px; white-space:pre-line;"></div>
+    <div id="ctResult" style="margin-top:12px;"></div>
+  </div>
+  <div class="card">
+    <h3>Have a code?</h3>
+    <p class="muted">Enter a set code someone shared with you. Only works while your subscription is active.</p>
+    <div class="row">
+      <input id="ctCode" placeholder="e.g. 7F3K9Q" style="flex:1;max-width:200px;text-transform:uppercase;">
+      <button class="subtle" id="ctRedeem">Go</button>
+    </div>
+    <div id="ctRedeemStatus" class="muted" style="margin-top:8px;"></div>
+  </div>
+  <div class="card">
+    <h3>Your custom sets</h3>
+    <div id="ctMySets" class="muted">Loading…</div>
+  </div>`;
+
+  document.getElementById('ctBuild').onclick = buildCustomSet;
+  document.getElementById('ctRedeem').onclick = redeemShareCode;
+  loadMyCustomSets();
+}
+
+async function loadMyCustomSets(){
+  const el = document.getElementById('ctMySets');
+  const { data: mySets } = await sb.from('sets').select('*').eq('user_id', S.profile.id).eq('set_type','custom').order('created_at', {ascending:false});
+  if(!mySets || !mySets.length){ el.innerHTML = 'None yet — build one above.'; return; }
+  el.innerHTML = mySets.map(s=>{
+    const n = (s.question_ids||[]).length;
+    return `<div class="qrow" data-cs="${s.id}">
+      <div><b>${escapeHtml(s.subject||'Custom set')}</b> · ${n} q · ${s.duration_minutes} min ${s.share_code?`· code <span style="font-family:var(--mono);">${s.share_code}</span>`:''}</div>
+      <div class="row">
+        <button class="subtle" data-rank="${s.id}">Rank list</button>
+        <button class="primary" data-open="${s.id}">Open</button>
+      </div>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('[data-open]').forEach(b=> b.onclick = ()=> startAttempt(b.dataset.open));
+  el.querySelectorAll('[data-rank]').forEach(b=> b.onclick = ()=> viewCustomRankList(b.dataset.rank));
+}
+
+async function viewCustomRankList(setId){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `<div class="modal"><h3>Rank list</h3><div id="crlBody" class="muted">Loading…</div>
+    <button class="ghost" id="crlClose" style="margin-top:14px;width:100%;">Close</button></div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('crlClose').onclick = ()=> overlay.remove();
+
+  const [{ data: mine, error: mineErr }, { data: list, error: listErr }] = await Promise.all([
+    sb.rpc('set_rank_stats', { p_set_id: setId, p_user_id: S.profile.id }),
+    sb.rpc('set_rank_list_public', { p_set_id: setId, p_user_id: S.profile.id }),
+  ]);
+  const body = document.getElementById('crlBody');
+  if(mineErr && listErr){ body.innerHTML = `<p style="color:var(--red);">Couldn't load — ${listErr.message}. Make sure the custom-test SQL functions have been added in Supabase.</p>`; return; }
+
+  const myRow = Array.isArray(mine) ? mine[0] : mine;
+  let html = '';
+  if(myRow && myRow.user_total){
+    const pct = Math.round((myRow.user_correct/myRow.user_total)*1000)/10;
+    html += `<div class="card" style="background:var(--amber-dim);border-color:var(--amber);margin-bottom:12px;">
+      <div><b>Your result:</b> ${myRow.user_correct}/${myRow.user_total} correct (${pct}%)</div>
+      <div class="muted" style="margin-top:4px;">${myRow.rank ? `Rank ${myRow.rank}/${myRow.total_attempts} · ${myRow.percentile}ᵗʰ percentile` : 'Not enough attempts yet to rank against.'}</div>
+    </div>`;
+  } else {
+    html += `<p class="muted">You haven't submitted this set yet.</p>`;
+  }
+  const rows = list||[];
+  if(!rows.length){
+    html += `<p class="muted">No submitted attempts on this set yet.</p>`;
+  } else {
+    html += `<div style="overflow-x:auto;"><table class="ranktbl"><tr><th>Rank</th><th>Name</th><th>Correct</th><th>Score</th></tr>
+      ${rows.map(r=>`<tr class="${r.is_me?'me':''}"><td>${r.rnk}</td><td>${escapeHtml(r.name||'—')}</td><td>${r.correct_count}/${r.total_questions}</td><td>${r.score>0?'+':''}${r.score}</td></tr>`).join('')}
+    </table></div>`;
+  }
+  body.innerHTML = html;
+}
+
+async function buildCustomSet(){
+  const st = document.getElementById('ctStatus');
+  const resultEl = document.getElementById('ctResult');
+  resultEl.innerHTML = '';
+  st.textContent = 'Building your set…';
+  const qbankId = document.getElementById('ctPlatform').value;
+  const source = document.getElementById('ctSource').value;
+  const difficulty = document.getElementById('ctDifficulty').value;
+  const category = document.getElementById('ctCategory').value;
+
+  const { data: folders } = await sb.from('folders').select('id, name, exam_type').eq('qbank_id', qbankId);
+  if(!folders || !folders.length){ st.textContent = 'No sections in this platform yet.'; return; }
+
+  let targetFolders;
+  if(source==='all') targetFolders = folders;
+  else if(source==='subjectwise') targetFolders = folders.filter(f=>f.exam_type==='subjectwise');
+  else targetFolders = folders.filter(f=> folderGroupOf(f.name).toLowerCase().startsWith(source));
+  if(!targetFolders.length){ alert('No questions available for this combination.'); st.textContent=''; return; }
+
+  const { data: qRows } = await sb.from('questions').select('id').in('folder_id', targetFolders.map(f=>f.id));
+  let candidateIds = (qRows||[]).map(q=>q.id);
+  if(!candidateIds.length){ alert('No questions available for this combination.'); st.textContent=''; return; }
+
+  // Mistake-category filter, scoped to this user's own tags only.
+  if(category !== 'all'){
+    const { data: myCats } = await sb.from('categorizations').select('question_id, category').eq('user_id', S.profile.id).in('question_id', candidateIds);
+    const tagged = new Set((myCats||[]).map(c=>c.question_id));
+    if(category==='none'){
+      candidateIds = candidateIds.filter(id=>!tagged.has(id));
+    } else {
+      const withThisTag = new Set((myCats||[]).filter(c=>c.category===category).map(c=>c.question_id));
+      candidateIds = candidateIds.filter(id=>withThisTag.has(id));
+    }
+  }
+  if(!candidateIds.length){ alert('No questions available for this combination.'); st.textContent=''; return; }
+
+  // Never repeat a question from a previous custom set built with this exact
+  // same combination of filters (tracked via custom_filter_key on our own
+  // past 'custom' sets — see the Supabase notes for why this needs no extra
+  // tracking table).
+  const filterKey = `${qbankId}|${source}|${difficulty}|${category}`;
+  const { data: pastSets } = await sb.from('sets').select('question_ids').eq('user_id', S.profile.id).eq('set_type','custom').eq('custom_filter_key', filterKey);
+  const usedBefore = new Set();
+  (pastSets||[]).forEach(s=> (s.question_ids||[]).forEach(id=>usedBefore.add(id)));
+  candidateIds = candidateIds.filter(id=>!usedBefore.has(id));
+  if(!candidateIds.length){ alert('No questions available — you\'ve already used every question that matches this combination.'); st.textContent=''; return; }
+
+  // Difficulty filter needs community-wide accuracy, which RLS keeps a
+  // regular user from querying directly — routed through a SECURITY DEFINER
+  // RPC (question_accuracy_stats) that only returns aggregate counts.
+  if(difficulty !== 'all'){
+    const { data: stats, error: statErr } = await sb.rpc('question_accuracy_stats', { p_question_ids: candidateIds });
+    if(statErr){ st.textContent = 'Could not load difficulty stats: ' + statErr.message; return; }
+    const byId = {}; (stats||[]).forEach(s=> byId[s.question_id]=s);
+    candidateIds = candidateIds.filter(id=>{
+      const s = byId[id];
+      if(!s || !s.total_attempts) return false; // no data yet -> can't classify, excluded from Easy/Medium/Hard
+      const acc = s.correct_attempts / s.total_attempts;
+      if(difficulty==='hard') return acc <= 0.4;
+      if(difficulty==='medium') return acc > 0.4 && acc <= 0.7;
+      if(difficulty==='easy') return acc > 0.7;
+      return true;
+    });
+  }
+  if(!candidateIds.length){ alert('No questions available for this combination.'); st.textContent=''; return; }
+
+  // Shuffle and take up to 50; fewer than 50 just means a shorter set at the
+  // same 0.9 min/question rate the folder auto-split already uses.
+  for(let i=candidateIds.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [candidateIds[i],candidateIds[j]]=[candidateIds[j],candidateIds[i]]; }
+  const picked = candidateIds.slice(0, 50);
+  const duration = picked.length===50 ? 45 : Math.round(picked.length*0.9*10)/10;
+
+  const sourceLabel = {all:'All', subjectwise:'Subject-wise', pyq:'PYQ', gt:'GT'}[source];
+  const diffLabel = {all:'All', hard:'Hard', medium:'Medium', easy:'Easy'}[difficulty];
+  const catLabel = category==='all' ? 'All' : category==='none' ? 'None' : CATS.find(c=>c.key===category)?.label;
+  const label = `Custom: ${sourceLabel} · ${diffLabel} · ${catLabel}`;
+
+  const ins = await sb.from('sets').insert({
+    qbank_id: qbankId, folder_id: null, user_id: S.profile.id, set_type:'custom',
+    subject: label, custom_filter_key: filterKey,
+    question_ids: picked, duration_minutes: duration, set_number: 1
+  }).select().maybeSingle();
+  if(ins.error){ st.textContent = 'Could not create set: ' + ins.error.message; return; }
+
+  st.textContent = '';
+  resultEl.innerHTML = `<div class="qrow" style="cursor:default;">
+    <div><b>${picked.length} questions</b> · ${duration} min</div>
+    <div class="row"><button class="primary" id="ctStart">Start now</button><button class="subtle" id="ctShare">Get share code</button></div>
+  </div><div id="ctShareOut" class="muted" style="margin-top:8px;"></div>`;
+  document.getElementById('ctStart').onclick = ()=> startAttempt(ins.data.id, ins.data);
+  document.getElementById('ctShare').onclick = async ()=>{
+    const code = await ensureShareCode(ins.data.id);
+    document.getElementById('ctShareOut').innerHTML = code
+      ? `Share this code: <b style="font-family:var(--mono);font-size:16px;letter-spacing:.08em;">${code}</b>`
+      : 'Could not generate a code — try again.';
+    loadMyCustomSets();
+  };
+  loadMyCustomSets();
+}
+
+async function ensureShareCode(setId){
+  // Retries on the rare chance of a code collision (share_code is UNIQUE).
+  for(let attempt=0; attempt<5; attempt++){
+    const code = Array.from({length:6}, ()=> '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random()*32)]).join('');
+    const upd = await sb.from('sets').update({share_code:code}).eq('id', setId).select().maybeSingle();
+    if(!upd.error) return upd.data.share_code;
+  }
+  return null;
+}
+
+async function redeemShareCode(){
+  const st = document.getElementById('ctRedeemStatus');
+  const code = document.getElementById('ctCode').value.trim().toUpperCase();
+  if(!code){ st.textContent = 'Type a code first.'; return; }
+  st.textContent = 'Looking up…';
+  const { data, error } = await sb.rpc('redeem_share_code', { p_code: code });
+  const row = Array.isArray(data) ? data[0] : data;
+  if(error || !row){ st.textContent = 'Code not found.'; return; }
+  st.textContent = '';
+  startAttempt(row.id, row);
+}
+
 async function loadSubTab(){
   const body=document.getElementById('utabBody');
   body.innerHTML = '';
@@ -876,8 +1155,8 @@ async function loadSubTab(){
 }
 
 // ================= EXAM PLAYER =================
-async function startAttempt(setId){
-  const { data: set } = await sb.from('sets').select('*').eq('id', setId).maybeSingle();
+async function startAttempt(setId, presetSet){
+  const set = presetSet || (await sb.from('sets').select('*').eq('id', setId).maybeSingle()).data;
   let { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', setId).eq('status','in_progress').maybeSingle();
   // Deliberately excludes image_url: some questions now carry embedded
   // base64 images (can be several hundred KB each), and pulling that for
@@ -1412,14 +1691,38 @@ async function renderFolderList(){
   const { data: folders } = await sb.from('folders').select('*').eq('qbank_id', qbankId).order('name');
   const el = document.getElementById('folderList');
   if(!folders || !folders.length){ el.innerHTML = `<p class="muted">No sections in this qbank yet.</p>`; return; }
-  let html = '';
-  for(const f of folders){
-    const { count } = await sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', f.id);
-    const cfg = EXAM_CONFIG[f.exam_type];
-    html += `<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:8px 0;">
-      <input type="checkbox" value="${f.id}" class="folderChk" style="width:auto;"> ${f.name} <span class="muted">(${count||0} questions — currently: ${cfg?cfg.label:'not set'})</span></label>`;
+  const counts = await Promise.all(folders.map(f=>sb.from('questions').select('id',{count:'exact',head:true}).eq('folder_id',f.id)));
+  folders.forEach((f,i)=>{ f._count = counts[i].count; });
+
+  function groupOf(name){ return folderGroupOf(name); }
+  const groups = [...new Set(folders.map(f=>groupOf(f.name)))].sort();
+
+  function renderChecklist(filterGroup){
+    const visible = folders.filter(f=> filterGroup==='__all__' || groupOf(f.name)===filterGroup);
+    let html = `<div class="row" style="margin-bottom:10px;">
+      <select id="folderGroupSelAdmin" style="max-width:260px;">
+        <option value="__all__">All sections (${folders.length})</option>
+        ${groups.map(g=>{
+          const n = folders.filter(f=>groupOf(f.name)===g).length;
+          return `<option value="${g}" ${g===filterGroup?'selected':''}>${g} (${n})</option>`;
+        }).join('')}
+      </select>
+      <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:13px;margin:0;">
+        <input type="checkbox" id="folderChkAll" style="width:auto;"> Select all shown</label>
+    </div><div id="folderChecklistItems">`;
+    for(const f of visible){
+      const cfg = EXAM_CONFIG[f.exam_type];
+      html += `<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:8px 0;">
+        <input type="checkbox" value="${f.id}" class="folderChk" style="width:auto;"> ${f.name} <span class="muted">(${f._count||0} questions — currently: ${cfg?cfg.label:'not set'})</span></label>`;
+    }
+    html += `</div>`;
+    el.innerHTML = html;
+    document.getElementById('folderGroupSelAdmin').onchange = (e)=> renderChecklist(e.target.value);
+    document.getElementById('folderChkAll').onchange = (e)=>{
+      document.querySelectorAll('.folderChk').forEach(c=> c.checked = e.target.checked);
+    };
   }
-  el.innerHTML = html;
+  renderChecklist(groups.length===1 ? groups[0] : '__all__');
 }
 function chunkToSets(ids, perSet, fullMinutes, subject){
   // perSet:null means "topic-wise" — never split, one set holds every
