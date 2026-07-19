@@ -1308,19 +1308,25 @@ async function adminUpload(){
         log.push(`${file.name} → ${qbankLabel?`qbank "${qbankLabel}" / `:''}section "${folderName}": ${inserted} questions added. Pattern: ${patternLabel}${detection.subject?` (subject: ${detection.subject})`:''}.`);
         st.textContent = log.join('\n');
 
-        // Auto-generate sets right away — but only if this section has no sets
-        // yet (new folder, or an older folder that was never configured). If
-        // the section is already live with sets/attempts, we don't silently
-        // wipe them on a routine re-upload; use "Sections" tab to regenerate
-        // on purpose once you've reviewed it.
+        // Auto-generate sets right away. If the folder already existed from
+        // an earlier upload, its exam_type could be stale (e.g. created
+        // before this file started declaring "exam_type" explicitly, or
+        // uploaded once under a different pattern). When the file makes an
+        // explicit pattern declaration that disagrees with what's stored,
+        // treat that as authoritative, update it, and regenerate — this is
+        // what stops "half the sections are 50q/45min, half are topic-wise"
+        // from happening on a re-upload. If no explicit pattern is declared
+        // we keep the old hands-off behaviour (only set on first creation,
+        // never silently overwritten).
+        const patternIsStale = explicitType && folder.exam_type !== explicitType;
+        if(!folder.exam_type || patternIsStale){
+          await sb.from('folders').update({exam_type:detection.type}).eq('id', folder.id);
+          folder.exam_type = detection.type;
+        }
         const { count: existingSetCount } = await sb.from('sets').select('id', {count:'exact', head:true}).eq('folder_id', folder.id).is('user_id', null);
-        if(!existingSetCount){
-          if(!folder.exam_type){
-            await sb.from('folders').update({exam_type:detection.type}).eq('id', folder.id);
-            folder.exam_type = detection.type;
-          }
+        if(!existingSetCount || patternIsStale){
           const n = await generateSetsForFolder(folder);
-          log.push(`   ↳ auto-split into ${n} set(s).`);
+          log.push(patternIsStale ? `   ↳ pattern updated to "${EXAM_CONFIG[folder.exam_type]?.label||folder.exam_type}" and regenerated: ${n} set(s).` : `   ↳ auto-split into ${n} set(s).`);
           st.textContent = log.join('\n');
         } else {
           log.push(`   ↳ section already has sets — go to "Sections" tab and re-generate if you want these new questions included.`);
