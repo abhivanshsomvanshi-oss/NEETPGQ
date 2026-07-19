@@ -195,11 +195,6 @@ const EXAM_CONFIG = {
   neetpg:       {label:'NEET PG pattern',       perSet:40, minutesPerFull:42, sequential:true},
   updated_neetpg:{label:'Updated NEET PG pattern', perSet:36, minutesPerFull:42, sequential:true},
   auto_subsection:{label:'Auto (non-subject file) — 50 q / 45 min subsections', perSet:50, minutesPerFull:45, sequential:true},
-  // One set per section, no chunking — every question in the folder becomes
-  // a single set, with duration = 0.9 minutes × question count (rounded to
-  // 1 decimal). perSet:null is the signal chunkToSets() uses to mean
-  // "don't split, put them all in one set."
-  topicwise:    {label:'Topic-wise (1 set/topic, 0.9 min per question)', perSet:null, minutesPerFull:null, sequential:false},
 };
 
 // The 19 NEET PG subjects, each with common short/long-form aliases used by
@@ -1373,7 +1368,6 @@ async function adminFolders(){
       <option value="inicet">INICET pattern (4×50 q, 45 min, sequential)</option>
       <option value="neetpg">NEET PG pattern (5×40 q, 42 min, sequential)</option>
       <option value="updated_neetpg">Updated NEET PG (5×36 q, 42 min, sequential)</option>
-      <option value="topicwise">Topic-wise (1 set/topic, 0.9 min per question)</option>
     </select>
     <button class="primary" id="genSets" style="margin-top:14px;">Generate sets for selected sections</button>
     <div id="genStatus" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
