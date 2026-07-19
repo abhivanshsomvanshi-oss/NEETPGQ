@@ -916,7 +916,10 @@ async function loadCustomTab(isActive){
     <h3>Build your own set</h3>
     <p class="muted">Pulls from whichever platform/section combo you pick below, filtered the way you want. Every regenerate with the same options gives you fresh questions — never a repeat of a set you already made this way.</p>
     <label>Platform</label>
-    <select id="ctPlatform">${qbanks.map(q=>`<option value="${q.id}">${q.name}</option>`).join('')}</select>
+    <select id="ctPlatform">
+      <option value="__all__">All platforms</option>
+      ${qbanks.map(q=>`<option value="${q.id}">${q.name}</option>`).join('')}
+    </select>
     <label>Question source</label>
     <select id="ctSource">
       <option value="all">All (subject-wise + PYQ + GT + everything)</option>
@@ -1025,7 +1028,9 @@ async function buildCustomSet(){
   const difficulty = document.getElementById('ctDifficulty').value;
   const category = document.getElementById('ctCategory').value;
 
-  const { data: folders } = await sb.from('folders').select('id, name, exam_type').eq('qbank_id', qbankId);
+  const { data: folders } = await (qbankId==='__all__'
+    ? sb.from('folders').select('id, name, exam_type, qbank_id')
+    : sb.from('folders').select('id, name, exam_type, qbank_id').eq('qbank_id', qbankId));
   if(!folders || !folders.length){ st.textContent = 'No sections in this platform yet.'; return; }
 
   let targetFolders;
@@ -1090,10 +1095,11 @@ async function buildCustomSet(){
   const sourceLabel = {all:'All', subjectwise:'Subject-wise', pyq:'PYQ', gt:'GT'}[source];
   const diffLabel = {all:'All', hard:'Hard', medium:'Medium', easy:'Easy'}[difficulty];
   const catLabel = category==='all' ? 'All' : category==='none' ? 'None' : CATS.find(c=>c.key===category)?.label;
-  const label = `Custom: ${sourceLabel} · ${diffLabel} · ${catLabel}`;
+  const platformLabel = qbankId==='__all__' ? 'All platforms' : document.getElementById('ctPlatform').selectedOptions[0].textContent;
+  const label = `Custom: ${platformLabel} · ${sourceLabel} · ${diffLabel} · ${catLabel}`;
 
   const ins = await sb.from('sets').insert({
-    qbank_id: qbankId, folder_id: null, user_id: S.profile.id, set_type:'custom',
+    qbank_id: qbankId==='__all__' ? null : qbankId, folder_id: null, user_id: S.profile.id, set_type:'custom',
     subject: label, custom_filter_key: filterKey,
     question_ids: picked, duration_minutes: duration, set_number: 1
   }).select().maybeSingle();
