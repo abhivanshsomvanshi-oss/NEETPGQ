@@ -500,12 +500,12 @@ function render(){
 function topbar(title, right=''){
   const isLight = document.documentElement.classList.contains('light');
   const p = S.profile;
-  const who = (p && p.role!=='admin' && p.name) ? `<div class="row" style="gap:8px;align-items:center;margin-right:4px;">
-    ${p.avatar_url ? `<img src="${p.avatar_url}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--amber);">`
-                    : `<div style="width:32px;height:32px;border-radius:50%;background:var(--amber-dim);color:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--display);border:2px solid var(--amber);">${escapeHtml(p.name[0]||'?').toUpperCase()}</div>`}
-    <div style="line-height:1.25;">
-      <div style="font-weight:700;font-size:13.5px;">${escapeHtml(p.name)}</div>
-      ${p.batch?`<div class="muted" style="font-size:11px;">Batch ${escapeHtml(p.batch)}</div>`:''}
+  const who = (p && p.role!=='admin' && p.name) ? `<div class="row" style="gap:11px;align-items:center;margin-right:6px;">
+    ${p.avatar_url ? `<img src="${p.avatar_url}" alt="" style="width:46px;height:46px;border-radius:50%;object-fit:cover;border:2px solid var(--amber);">`
+                    : `<div style="width:46px;height:46px;border-radius:50%;background:var(--amber-dim);color:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;font-family:var(--display);border:2px solid var(--amber);">${escapeHtml(p.name[0]||'?').toUpperCase()}</div>`}
+    <div style="line-height:1.3;">
+      <div style="font-weight:700;font-size:17px;">${escapeHtml(p.name)}</div>
+      ${p.batch?`<div class="muted" style="font-size:13px;">Batch ${escapeHtml(p.batch)}</div>`:''}
     </div>
   </div>` : '';
   return `<div class="topbar"><div class="brand"><span class="dot"></span>${title}</div><div class="row">${who}${right}<button class="themebtn" id="themeBtn" title="Toggle dark/light">${isLight?'🌙':'☀️'}</button><button class="ghost" id="signoutBtn" style="padding:8px 12px;font-size:13px;">Sign out</button></div></div>`;
@@ -534,16 +534,16 @@ function renderAuth(){
       <label>Email</label><input id="email" type="email" placeholder="you@example.com">
       <label>Password</label><input id="pass" type="password" placeholder="••••••••">
       ${S.authMode==='signup' ? `
-      <label>Full name</label><input id="suName" placeholder="Your name">
+      <label>Full name *</label><input id="suName" placeholder="Your name" required>
       <div class="row" style="gap:10px;">
-        <div style="flex:1;"><label>Age</label><input id="suAge" type="number" min="15" max="80" placeholder="22"></div>
-        <div style="flex:1;"><label>Batch</label><input id="suBatch" placeholder="e.g. 2024"></div>
+        <div style="flex:1;"><label>Age *</label><input id="suAge" type="number" min="15" max="80" placeholder="22" required></div>
+        <div style="flex:1;"><label>Batch *</label><input id="suBatch" placeholder="e.g. 2024" required></div>
       </div>
-      <label>College</label><input id="suCollege" placeholder="Your college name">
-      <label>Profile picture</label>
-      <div class="filepick"><input id="suAvatar" type="file" accept="image/*"></div>
-      <label>College ID (photo/scan)</label>
-      <div class="filepick"><input id="suCollegeId" type="file" accept="image/*,.pdf"></div>
+      <label>College *</label><input id="suCollege" placeholder="Your college name" required>
+      <label>Profile picture *</label>
+      <div class="filepick"><input id="suAvatar" type="file" accept="image/*" required></div>
+      <label>College ID (photo/scan) *</label>
+      <div class="filepick"><input id="suCollegeId" type="file" accept="image/*,.pdf" required></div>
       ` : ''}
       <div id="authErr" class="muted" style="color:var(--red);margin-top:8px;"></div>
       <button class="primary" id="authGo" style="width:100%;margin-top:16px;">${S.authMode==='login'?'Login':'Create account'}</button>
@@ -565,6 +565,11 @@ function renderAuth(){
       const avatarFile = document.getElementById('suAvatar').files[0];
       const idFile = document.getElementById('suCollegeId').files[0];
       if(!name){ errEl.textContent='Enter your name.'; return; }
+      if(!age){ errEl.textContent='Enter your age.'; return; }
+      if(!batch){ errEl.textContent='Enter your batch.'; return; }
+      if(!college){ errEl.textContent='Enter your college.'; return; }
+      if(!avatarFile){ errEl.textContent='Upload a profile picture.'; return; }
+      if(!idFile){ errEl.textContent='Upload your college ID.'; return; }
       btn.disabled = true; btn.textContent = 'Creating account…';
       const { error, data: suData } = await sb.auth.signUp({ email, password });
       if(error){ errEl.textContent=error.message; btn.disabled=false; btn.textContent='Create account'; return; }
