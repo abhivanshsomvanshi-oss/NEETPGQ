@@ -268,6 +268,22 @@ function detectPlatformName(name){
   return null;
 }
 
+// ---------- category grouping (Subject-wise / Tests / GT / NEET PG / INICET) ----------
+// Buckets a folder into one of the 5 top-level categories the user browses
+// by, computed purely from data already on hand (folder name + exam_type) —
+// no extra Supabase query needed. Order here also drives display order.
+const CATEGORY_ORDER = ['Subject-wise','Tests','Grand Tests (GT)','NEET PG','INICET','FMGE','Other'];
+function categoryOf(f){
+  if(f.exam_type==='subjectwise') return 'Subject-wise';
+  const g = folderGroupOf(f.name).toLowerCase();
+  if(f.exam_type==='inicet' || g.startsWith('inicet')) return 'INICET';
+  if(f.exam_type==='neetpg' || f.exam_type==='updated_neetpg' || g.startsWith('neetpg') || g.startsWith('neet pg') || g.startsWith('neet')) return 'NEET PG';
+  if(f.exam_type==='fmge' || g.startsWith('fmge')) return 'FMGE';
+  if(g.startsWith('gt')) return 'Grand Tests (GT)';
+  if(g.startsWith('pyq') || g.includes('test')) return 'Tests';
+  return 'Other';
+}
+
 let S = { session:null, profile:null, deviceId:null, view:'loading', nav:{} };
 
 // ---------- theme (dark / light) ----------
@@ -642,7 +658,7 @@ async function renderUser(){
   if(S.utab==='sub') return loadSubTab();
 }
 
-// ---- QBank -> Folder -> Sets navigation ----
+// ---- QBank -> Category -> Folder -> Sets navigation ----
 function crumbBar(items){
   // items: [{label, onClick}]
   return `<div class="crumbs">` + items.map((it,i)=>{
@@ -652,6 +668,7 @@ function crumbBar(items){
 }
 async function loadQbanksNav(isActive){
   if(!S.nav.qbankId){ return loadQbankList(isActive); }
+  if(!S.nav.category){ return loadCategoryList(isActive); }
   if(!S.nav.folderId){ return loadFolderList(isActive); }
   return loadFolderSets(isActive);
 }
@@ -677,44 +694,77 @@ async function loadQbankList(isActive){
   body.innerHTML += html;
   body.querySelectorAll('[data-qb]').forEach(el=>el.onclick=()=>{ goTo({nav:{qbankId: el.dataset.qb}}); });
 }
-async function loadFolderList(isActive){
+// Level 2: shows the 5 top-level category cards (Subject-wise / Tests / GT /
+// NEET PG / INICET) for this qbank. Deliberately fetches only id/name/exam_type
+// for every folder (no count queries here) — grouping is done client-side for
+// free. This is what removes the lag that used to happen when opening a
+// platform with 200+ sections: previously every section's question-count was
+// queried at once right here; now that only happens per-category (see
+// loadFolderList), on a much smaller batch.
+async function loadCategoryList(isActive){
   const myToken = navToken;
   const body=document.getElementById('utabBody');
   body.innerHTML = '';
   const { data: qb } = await sb.from('qbanks').select('*').eq('id', S.nav.qbankId).maybeSingle();
   if(myToken !== navToken) return;
   body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank'}]);
-  const { data: folders } = await sb.from('folders').select('*').eq('qbank_id', S.nav.qbankId).order('name');
+  const { data: folders } = await sb.from('folders').select('id, name, exam_type').eq('qbank_id', S.nav.qbankId);
   if(myToken !== navToken) return;
-  // Same fix as the qbank list: run every section's question-count query in
-  // parallel rather than awaiting them one at a time, which was what made
-  // opening a qbank (e.g. BTR) with many sections feel slow.
-  const counts = await Promise.all((folders||[]).map(f=>
+  if(!folders || !folders.length){ document.getElementById('utabBody').innerHTML += `<div class="card muted">No sections in this qbank yet.</div>`; return; }
+  const byCat = {};
+  folders.forEach(f=>{ const c=categoryOf(f); (byCat[c]=byCat[c]||[]).push(f); });
+  let html = '<div class="grid">';
+  const orderedCats = CATEGORY_ORDER.filter(c=>byCat[c]).concat(Object.keys(byCat).filter(c=>!CATEGORY_ORDER.includes(c)));
+  orderedCats.forEach(cat=>{
+    html += `<div class="card" style="cursor:pointer;" data-cat="${cat}"><h3>${cat}</h3><div class="muted">${byCat[cat].length} section${byCat[cat].length===1?'':'s'}</div></div>`;
+  });
+  html += '</div>';
+  if(myToken !== navToken) return;
+  document.getElementById('utabBody').innerHTML += html;
+  document.querySelectorAll('[data-cat]').forEach(el=>el.onclick=()=>{ goTo({nav:{...S.nav, category: el.dataset.cat}}); });
+  const crumb = document.querySelector('[data-crumb="0"]');
+  if(crumb) crumb.onclick = ()=>{ goTo({nav:{}}); };
+}
+async function loadFolderList(isActive){
+  const myToken = navToken;
+  const body=document.getElementById('utabBody');
+  body.innerHTML = '';
+  const { data: qb } = await sb.from('qbanks').select('*').eq('id', S.nav.qbankId).maybeSingle();
+  if(myToken !== navToken) return;
+  body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank', onClick:true},{label:S.nav.category}]);
+  const { data: allFolders } = await sb.from('folders').select('*').eq('qbank_id', S.nav.qbankId).order('name');
+  if(myToken !== navToken) return;
+  const folders = (allFolders||[]).filter(f=>categoryOf(f)===S.nav.category);
+  // Counts fetched only for this category's folders — a small, bounded batch
+  // (e.g. the 19 subjects, or however many Test/GT/etc sections exist),
+  // instead of every section in the whole platform at once.
+  const counts = await Promise.all(folders.map(f=>
     sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', f.id)
   ));
   if(myToken !== navToken) return;
-  (folders||[]).forEach((f,i)=>{ f._count = counts[i].count; });
+  folders.forEach((f,i)=>{ f._count = counts[i].count; });
 
-  // Group folders by their name's prefix — "Anatomy - Abdomen & Pelvis" groups
-  // under "Anatomy"; a name with no " - " (GT1, PYQ 2023, INICET Set 3, ...)
-  // groups under its leading non-numeric word (GT, PYQ, INICET). This turns a
-  // flat wall of 260+ sections into a pickable dropdown without touching how
-  // sections/sets are stored.
+  // Within a category, folders can still be further grouped by name prefix
+  // (e.g. inside "Subject-wise": "Anatomy - Abdomen", "Anatomy - Thorax" ->
+  // "Anatomy"). Only shown if there's more than one group.
   function groupOf(name){ return folderGroupOf(name); }
-  const groups = [...new Set((folders||[]).map(f=>groupOf(f.name)))].sort();
+  const groups = [...new Set(folders.map(f=>groupOf(f.name)))].sort();
 
   function renderList(filterGroup){
     if(myToken !== navToken) return;
-    let html = `<div class="row" style="margin-bottom:14px;">
-      <select id="folderGroupSel" style="max-width:280px;">
-        <option value="__all__">All sections (${(folders||[]).length})</option>
-        ${groups.map(g=>{
-          const n = (folders||[]).filter(f=>groupOf(f.name)===g).length;
-          return `<option value="${g}" ${g===filterGroup?'selected':''}>${g} (${n})</option>`;
-        }).join('')}
-      </select>
-    </div>`;
-    const visible = (folders||[]).filter(f=> filterGroup==='__all__' || groupOf(f.name)===filterGroup);
+    let html = '';
+    if(groups.length>1){
+      html += `<div class="row" style="margin-bottom:14px;">
+        <select id="folderGroupSel" style="max-width:280px;">
+          <option value="__all__">All in ${S.nav.category} (${folders.length})</option>
+          ${groups.map(g=>{
+            const n = folders.filter(f=>groupOf(f.name)===g).length;
+            return `<option value="${g}" ${g===filterGroup?'selected':''}>${g} (${n})</option>`;
+          }).join('')}
+        </select>
+      </div>`;
+    }
+    const visible = folders.filter(f=> filterGroup==='__all__' || groupOf(f.name)===filterGroup);
     if(!visible.length){
       html += `<div class="card muted">No sections in this group.</div>`;
     } else {
@@ -729,7 +779,8 @@ async function loadFolderList(isActive){
     const listArea = document.getElementById('folderListArea');
     if(!listArea) return;
     listArea.innerHTML = html;
-    document.getElementById('folderGroupSel').onchange = (e)=> renderList(e.target.value);
+    const sel = document.getElementById('folderGroupSel');
+    if(sel) sel.onchange = (e)=> renderList(e.target.value);
     document.querySelectorAll('[data-folder]').forEach(el=>{
       el.onclick = async ()=>{
         const fid = el.dataset.folder;
@@ -742,9 +793,11 @@ async function loadFolderList(isActive){
 
   if(myToken !== navToken) return;
   document.getElementById('utabBody').innerHTML += `<div id="folderListArea"></div>`;
-  renderList(groups.length===1 ? groups[0] : '__all__');
-  const crumb = document.querySelector('[data-crumb="0"]');
-  if(crumb) crumb.onclick = ()=>{ goTo({nav:{}}); };
+  renderList('__all__');
+  const crumb0 = document.querySelector('[data-crumb="0"]');
+  if(crumb0) crumb0.onclick = ()=>{ goTo({nav:{}}); };
+  const crumb1 = document.querySelector('[data-crumb="1"]');
+  if(crumb1) crumb1.onclick = ()=>{ goTo({nav:{qbankId:S.nav.qbankId}}); };
 }
 async function loadFolderSets(isActive){
   const myToken = navToken;
@@ -754,9 +807,10 @@ async function loadFolderSets(isActive){
   if(myToken !== navToken) return;
   const { data: folder } = await sb.from('folders').select('*').eq('id', S.nav.folderId).maybeSingle();
   if(myToken !== navToken) return;
-  body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank', onClick:true},{label:folder?.name||'Section'}]);
+  body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank', onClick:true},{label:S.nav.category, onClick:true},{label:folder?.name||'Section'}]);
   document.querySelector('[data-crumb="0"]').onclick = ()=>{ goTo({nav:{}}); };
   document.querySelector('[data-crumb="1"]').onclick = ()=>{ goTo({nav:{qbankId:S.nav.qbankId}}); };
+  document.querySelector('[data-crumb="2"]').onclick = ()=>{ goTo({nav:{qbankId:S.nav.qbankId, category:S.nav.category}}); };
 
   const { data: sets } = await sb.from('sets').select('*').eq('folder_id', folder.id).is('user_id', null).order('subject').order('set_number');
   if(myToken !== navToken) return;
@@ -1740,7 +1794,7 @@ async function adminFolders(){
   S.adminQbSel = S.adminQbSel || qbanks[0].id;
   body.innerHTML = `<div class="card">
     <h3>Assign exam pattern per section</h3>
-    <p class="muted">Pick a qbank, tick one or more sections, choose the pattern, then generate. Re-generating replaces existing shared sets for the selected sections.</p>
+    <p class="muted">Pick a qbank, a category, tick one or more sections, choose the pattern, then generate. Re-generating replaces existing shared sets for the selected sections.</p>
     <label>QBank</label>
     <div style="display:flex; gap:8px; align-items:flex-end;">
       <select id="qbPick" style="flex:1;">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.adminQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
@@ -1758,7 +1812,7 @@ async function adminFolders(){
     <button class="primary" id="genSets" style="margin-top:14px;">Generate sets for selected sections</button>
     <div id="genStatus" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
   </div>`;
-  document.getElementById('qbPick').onchange = (e)=>{ S.adminQbSel = e.target.value; adminFolders(); };
+  document.getElementById('qbPick').onchange = (e)=>{ S.adminQbSel = e.target.value; S.adminCategory = null; adminFolders(); };
   document.getElementById('delQbankBtn').onclick = async ()=>{
     const qbId = document.getElementById('qbPick').value;
     const qb = qbanks.find(q=>q.id===qbId);
@@ -1792,39 +1846,71 @@ async function adminFolders(){
     renderFolderList();
   };
 }
+// Level 1 inside admin's "Sections" tab: a category picker (Subject-wise /
+// Tests / GT / NEET PG / INICET), computed client-side from a single
+// id+name+exam_type fetch (no counts). Only the folders in the *selected*
+// category then get their question-count queried — same fix as the
+// user-facing nav, applied here too, since this screen used to blast a
+// count query for every section in the whole qbank at once.
 async function renderFolderList(){
   const qbankId = document.getElementById('qbPick').value;
   S.adminQbSel = qbankId;
-  const { data: folders } = await sb.from('folders').select('*').eq('qbank_id', qbankId).order('name');
+  const { data: allFolders } = await sb.from('folders').select('id, name, exam_type').eq('qbank_id', qbankId).order('name');
   const el = document.getElementById('folderList');
-  if(!folders || !folders.length){ el.innerHTML = `<p class="muted">No sections in this qbank yet.</p>`; return; }
+  if(!allFolders || !allFolders.length){ el.innerHTML = `<p class="muted">No sections in this qbank yet.</p>`; return; }
+
+  const byCat = {};
+  allFolders.forEach(f=>{ const c=categoryOf(f); (byCat[c]=byCat[c]||[]).push(f); });
+  const cats = CATEGORY_ORDER.filter(c=>byCat[c]).concat(Object.keys(byCat).filter(c=>!CATEGORY_ORDER.includes(c)));
+  if(!S.adminCategory || !byCat[S.adminCategory]) S.adminCategory = cats[0];
+
+  el.innerHTML = `<div class="row" style="margin-bottom:10px;">
+      <select id="adminCatSel" style="max-width:240px;">
+        ${cats.map(c=>`<option value="${c}" ${c===S.adminCategory?'selected':''}>${c} (${byCat[c].length})</option>`).join('')}
+      </select>
+    </div><div id="folderChecklistWrap" class="muted">Loading…</div>`;
+  document.getElementById('adminCatSel').onchange = (e)=>{ S.adminCategory = e.target.value; renderFolderList(); };
+
+  const wrap = document.getElementById('folderChecklistWrap');
+  const folders = byCat[S.adminCategory];
   const counts = await Promise.all(folders.map(f=>sb.from('questions').select('id',{count:'exact',head:true}).eq('folder_id',f.id)));
   folders.forEach((f,i)=>{ f._count = counts[i].count; });
+  if(document.getElementById('adminCatSel') && document.getElementById('adminCatSel').value !== S.adminCategory) return; // stale, a newer category was picked meanwhile
 
   function groupOf(name){ return folderGroupOf(name); }
   const groups = [...new Set(folders.map(f=>groupOf(f.name)))].sort();
 
   function renderChecklist(filterGroup){
     const visible = folders.filter(f=> filterGroup==='__all__' || groupOf(f.name)===filterGroup);
-    let html = `<div class="row" style="margin-bottom:10px;">
-      <select id="folderGroupSelAdmin" style="max-width:260px;">
-        <option value="__all__">All sections (${folders.length})</option>
-        ${groups.map(g=>{
-          const n = folders.filter(f=>groupOf(f.name)===g).length;
-          return `<option value="${g}" ${g===filterGroup?'selected':''}>${g} (${n})</option>`;
-        }).join('')}
-      </select>
-      <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:13px;margin:0;">
-        <input type="checkbox" id="folderChkAll" style="width:auto;"> Select all shown</label>
-    </div><div id="folderChecklistItems">`;
+    let html = '';
+    if(groups.length>1){
+      html += `<div class="row" style="margin-bottom:10px;">
+        <select id="folderGroupSelAdmin" style="max-width:260px;">
+          <option value="__all__">All in ${S.adminCategory} (${folders.length})</option>
+          ${groups.map(g=>{
+            const n = folders.filter(f=>groupOf(f.name)===g).length;
+            return `<option value="${g}" ${g===filterGroup?'selected':''}>${g} (${n})</option>`;
+          }).join('')}
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:13px;margin:0;">
+          <input type="checkbox" id="folderChkAll" style="width:auto;"> Select all shown</label>
+      </div>`;
+    } else {
+      html += `<div class="row" style="margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:13px;margin:0;">
+          <input type="checkbox" id="folderChkAll" style="width:auto;"> Select all shown</label>
+      </div>`;
+    }
+    html += `<div id="folderChecklistItems">`;
     for(const f of visible){
       const cfg = EXAM_CONFIG[f.exam_type];
       html += `<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:8px 0;">
         <input type="checkbox" value="${f.id}" class="folderChk" style="width:auto;"> ${f.name} <span class="muted">(${f._count||0} questions — currently: ${cfg?cfg.label:'not set'})</span></label>`;
     }
     html += `</div>`;
-    el.innerHTML = html;
-    document.getElementById('folderGroupSelAdmin').onchange = (e)=> renderChecklist(e.target.value);
+    wrap.innerHTML = html;
+    const sel = document.getElementById('folderGroupSelAdmin');
+    if(sel) sel.onchange = (e)=> renderChecklist(e.target.value);
     document.getElementById('folderChkAll').onchange = (e)=>{
       document.querySelectorAll('.folderChk').forEach(c=> c.checked = e.target.checked);
     };
