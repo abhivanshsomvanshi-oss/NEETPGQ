@@ -147,6 +147,22 @@ th{color:var(--text-dim);font-weight:600;font-size:12px;text-transform:uppercase
 .spinner{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--amber);border-right-color:var(--amber-2);border-radius:50%;animation:spin .7s linear infinite;margin:30px auto;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .qmeta{font-family:var(--mono);font-size:13px;color:var(--text-dim);margin-bottom:6px;}
+.reportcard{background:linear-gradient(160deg, color-mix(in srgb, var(--surface-2) 100%, var(--amber) 4%), var(--surface));border:1px solid var(--border);position:relative;overflow:hidden;}
+.reportcard::before{content:'';position:absolute;top:-40%;right:-15%;width:60%;height:140%;background:radial-gradient(circle, rgba(239,165,62,.10) 0%, transparent 70%);pointer-events:none;}
+.donut{--pct:0;width:112px;height:112px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--amber) calc(var(--pct)*1%), var(--surface-3) 0);box-shadow:var(--shadow-sm);position:relative;}
+.donut::after{content:'';position:absolute;inset:10px;border-radius:50%;background:var(--surface);}
+.donut span{position:relative;z-index:1;font-family:var(--display);font-weight:700;font-size:21px;}
+.diffbars{display:flex;gap:16px;align-items:flex-end;height:120px;padding-top:10px;}
+.diffbar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:8px;}
+.diffbar-track{width:100%;max-width:56px;flex:1;display:flex;align-items:flex-end;background:var(--surface-2);border-radius:10px;overflow:hidden;border:1px solid var(--border);}
+.diffbar-fill{width:100%;border-radius:9px 9px 0 0;transition:height .5s var(--ease);min-height:3px;}
+.diffbar-fill.hard{background:linear-gradient(180deg,var(--red),#c93840);}
+.diffbar-fill.med{background:linear-gradient(180deg,var(--amber),var(--amber-2));}
+.diffbar-fill.easy{background:linear-gradient(180deg,var(--green),#1f8f5e);}
+.diffbar-label{font-size:12.5px;color:var(--text-dim);text-align:center;line-height:1.3;}
+.diffbar-count{font-family:var(--display);font-weight:700;font-size:16px;color:var(--text);}
+.accbar-track{flex:1;height:8px;border-radius:6px;background:var(--surface-3);overflow:hidden;min-width:60px;}
+.accbar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--cyan),var(--green));}
 .stat-big{font-family:var(--mono);font-size:32px;font-weight:600;background:linear-gradient(135deg,var(--amber),var(--amber-2));-webkit-background-clip:text;background-clip:text;color:transparent;}
 .divider{height:1px;background:linear-gradient(90deg, transparent, var(--border), transparent);margin:16px 0;}
 .qimg{max-width:100%;border-radius:10px;margin:10px 0;display:block;background:var(--surface-2);min-height:60px;box-shadow:var(--shadow-sm);}
@@ -194,6 +210,17 @@ const CATS = [
 // "GT1", "PYQ 2023", "INICET Set 3" -> "GT" / "PYQ" / "INICET" (leading
 // non-numeric word). Used by the Sections nav filter, the admin checklist,
 // and the custom-test builder's Subject-wise/PYQ/GT source picker.
+// One round trip for question counts across many folders at once (fetching
+// only the folder_id column keeps the payload small), instead of firing a
+// separate count query per folder — that N-query fan-out was the main
+// source of lag when opening a platform/category on a slower connection.
+async function countsByFolder(folderIds){
+  const map = {};
+  if(!folderIds || !folderIds.length) return map;
+  const { data } = await sb.from('questions').select('folder_id').in('folder_id', folderIds);
+  (data||[]).forEach(r=>{ map[r.folder_id] = (map[r.folder_id]||0) + 1; });
+  return map;
+}
 function folderGroupOf(name){
   if(name.includes(' - ')) return name.split(' - ')[0].trim();
   const m = name.match(/^[^\d]+/);
@@ -475,9 +502,47 @@ async function loadProfile(){
   }
   S.profile = data;
   if(S.profile && S.profile.role!=='admin'){
+    // Subscription expired since last login: flip them to revoked and kick
+    // them out straight to the login screen instead of letting them sit on
+    // a "locked" screen while still technically signed in.
+    const expired = S.profile.status==='active' && S.profile.subscription_expiry && new Date(S.profile.subscription_expiry) <= new Date();
+    if(expired){
+      await sb.from('profiles').update({status:'revoked'}).eq('id', S.profile.id);
+      S.authNotice = 'expired';
+      await signOut();
+      return;
+    }
     await registerDevice();
+    startExpiryWatcher();
   }
   S.view = S.profile?.role==='admin' ? 'admin' : 'user';
+}
+// Re-checks the logged-in user's own status/expiry every couple of minutes
+// so an expiry that lands *during* an open session (or an admin
+// revoking/deleting them while they're mid-session) also forces a sign-out,
+// not just the check done at login.
+let expiryWatcherHandle = null;
+function startExpiryWatcher(){
+  if(expiryWatcherHandle) return;
+  expiryWatcherHandle = setInterval(async ()=>{
+    if(!S.session || !S.profile || S.profile.role==='admin') return;
+    const { data } = await sb.from('profiles').select('status, subscription_expiry').eq('id', S.profile.id).maybeSingle();
+    if(!data){
+      // Profile row is gone — admin deleted this account.
+      clearInterval(expiryWatcherHandle); expiryWatcherHandle=null;
+      S.authNotice = 'deleted';
+      await signOut();
+      return;
+    }
+    const expired = data.status==='active' && data.subscription_expiry && new Date(data.subscription_expiry) <= new Date();
+    const revokedElsewhere = data.status==='revoked' && S.profile.status!=='revoked';
+    if(expired || revokedElsewhere){
+      if(expired) await sb.from('profiles').update({status:'revoked'}).eq('id', S.profile.id);
+      clearInterval(expiryWatcherHandle); expiryWatcherHandle=null;
+      S.authNotice = expired ? 'expired' : 'revoked';
+      await signOut();
+    }
+  }, 120000);
 }
 async function registerDevice(){
   const { data: devices } = await sb.from('devices').select('*').eq('user_id', S.profile.id);
@@ -530,7 +595,7 @@ function bindTopbar(){
   const b=document.getElementById('signoutBtn'); if(b) b.onclick=signOut;
   const tb=document.getElementById('themeBtn'); if(tb) tb.onclick=toggleTheme;
 }
-async function signOut(){ await sb.auth.signOut(); S.profile=null; S.deviceBlocked=false; render(); }
+async function signOut(){ if(expiryWatcherHandle){ clearInterval(expiryWatcherHandle); expiryWatcherHandle=null; } await sb.auth.signOut(); S.profile=null; S.deviceBlocked=false; render(); }
 
 // ================= AUTH =================
 function renderAuth(){
@@ -543,6 +608,11 @@ function renderAuth(){
       <p class="muted" style="margin-top:6px;">CBT-style practice for NEET PG / INICET</p>
     </div>
     <div class="card">
+      ${S.authNotice ? `<div class="muted" style="color:var(--red);border:1px solid var(--red);border-radius:10px;padding:10px 12px;margin-bottom:14px;">${
+        S.authNotice==='expired' ? '⏳ Your subscription has expired. You have been signed out — renew to continue.' :
+        S.authNotice==='revoked' ? '🔒 Your access was revoked by admin. You have been signed out.' :
+        S.authNotice==='deleted' ? '🗑️ Your account was removed by admin.' : ''
+      }</div>` : ''}
       <div class="tabs">
         <div class="tab ${S.authMode==='login'?'on':''}" data-m="login">Login</div>
         <div class="tab ${S.authMode==='signup'?'on':''}" data-m="signup">Sign up</div>
@@ -568,6 +638,7 @@ function renderAuth(){
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{S.authMode=t.dataset.m; renderAuth();});
   document.getElementById('themeBtn').onclick = toggleTheme;
   document.getElementById('authGo').onclick = async ()=>{
+    S.authNotice = null;
     const email=document.getElementById('email').value.trim();
     const password=document.getElementById('pass').value;
     const errEl=document.getElementById('authErr'); errEl.textContent='';
@@ -735,14 +806,28 @@ async function loadFolderList(isActive){
   const { data: allFolders } = await sb.from('folders').select('*').eq('qbank_id', S.nav.qbankId).order('name');
   if(myToken !== navToken) return;
   const folders = (allFolders||[]).filter(f=>categoryOf(f)===S.nav.category);
-  // Counts fetched only for this category's folders — a small, bounded batch
-  // (e.g. the 19 subjects, or however many Test/GT/etc sections exist),
-  // instead of every section in the whole platform at once.
-  const counts = await Promise.all(folders.map(f=>
-    sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', f.id)
-  ));
+  // One round trip for all folder counts in this category, instead of one
+  // count query per folder — this was the main lag when opening a platform.
+  const countMap = await countsByFolder(folders.map(f=>f.id));
   if(myToken !== navToken) return;
-  folders.forEach((f,i)=>{ f._count = counts[i].count; });
+  folders.forEach(f=>{ f._count = countMap[f.id]||0; });
+
+  // How many subsections ("sub-folders") each section splits into, and this
+  // user's live score/percentile per section — both batched (one query +
+  // one set of parallel RPC calls) instead of a query per folder, so this
+  // stays as fast as the plain count above.
+  const { data: setRows } = await sb.from('sets').select('folder_id').is('user_id', null).eq('set_type','main').in('folder_id', folders.map(f=>f.id));
+  if(myToken !== navToken) return;
+  const setCountMap = {};
+  (setRows||[]).forEach(r=>{ setCountMap[r.folder_id] = (setCountMap[r.folder_id]||0)+1; });
+  const rankResults = await Promise.all(folders.map(f=>sb.rpc('folder_rank_stats', { p_folder_id: f.id, p_user_id: S.profile.id })));
+  if(myToken !== navToken) return;
+  folders.forEach((f,i)=>{
+    f._setCount = setCountMap[f.id]||0;
+    f._avgPerSet = f._setCount ? Math.round((f._count||0)/f._setCount) : (f._count||0);
+    const r = rankResults[i]?.data; const row = Array.isArray(r)?r[0]:r;
+    f._rank = (row && row.sets_completed) ? row : null;
+  });
 
   // Within a category, folders can still be further grouped by name prefix
   // (e.g. inside "Subject-wise": "Anatomy - Abdomen", "Anatomy - Thorax" ->
@@ -769,10 +854,14 @@ async function loadFolderList(isActive){
       html += `<div class="card muted">No sections in this group.</div>`;
     } else {
       visible.forEach(f=>{
-        const cfg = EXAM_CONFIG[f.exam_type];
-        html += `<div class="qrow" data-folder="${f.id}">
-          <div><b>${f.name}</b> · ${f._count||0} questions</div>
-          <span class="badge ${cfg?'active':'unset'}">${cfg?cfg.label:'Not configured'}</span>
+        const rank = f._rank;
+        const pct = rank && rank.user_total ? Math.round((rank.user_correct/rank.user_total)*1000)/10 : null;
+        html += `<div class="qrow" data-folder="${f.id}" style="flex-direction:column;align-items:stretch;gap:5px;">
+          <div class="row" style="justify-content:space-between;">
+            <b>${f.name}</b>
+          </div>
+          <div class="muted" style="font-size:13px;">${f._setCount||0} subsection${f._setCount===1?'':'s'} · ~${f._avgPerSet||0} question${f._avgPerSet===1?'':'s'} each · ${f._count||0} total${!f.exam_type?' · not set up yet':''}</div>
+          ${pct!=null ? `<div class="muted" style="font-size:12.5px;color:var(--amber);">Your score: ${pct}%${rank.rank?` · ${rank.percentile}ᵗʰ percentile (updates as more people attempt)`:' · not enough attempts yet to rank'}</div>` : ''}
         </div>`;
       });
     }
@@ -815,39 +904,93 @@ async function loadFolderSets(isActive){
   const { data: sets } = await sb.from('sets').select('*').eq('folder_id', folder.id).is('user_id', null).order('subject').order('set_number');
   if(myToken !== navToken) return;
   let html = '';
-  if(!sets || !sets.length){ html = `<div class="card muted">No sets generated for this section yet.</div>`; }
-  else if(folder.exam_type==='subjectwise'){
+  if(!sets || !sets.length){ html = `<div class="card muted">No sets generated for this section yet.</div>`; document.getElementById('utabBody').innerHTML += html; return; }
+
+  // Everything every set row needs (this user's latest attempt, and its
+  // rank stats) is fetched up front in a small, fixed number of batched
+  // round trips — instead of the old approach of awaiting several queries
+  // PER set inside a sequential for-loop, which was the main reason a
+  // section with many sets/subsections felt slow to open.
+  const setIds = sets.map(s=>s.id);
+  const { data: allAttempts } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('status','submitted').in('set_id', setIds).order('submitted_at', {ascending:false});
+  if(myToken !== navToken) return;
+  const attemptBySet = {};
+  (allAttempts||[]).forEach(a=>{ if(!attemptBySet[a.set_id]) attemptBySet[a.set_id] = a; }); // first hit per set = latest, since ordered desc
+  const attemptedIds = Object.keys(attemptBySet);
+  const rankResults = await Promise.all(attemptedIds.map(sid=>sb.rpc('set_rank_stats', { p_set_id: sid, p_user_id: S.profile.id })));
+  if(myToken !== navToken) return;
+  const rankBySet = {};
+  attemptedIds.forEach((sid,i)=>{ const r = rankResults[i].data; rankBySet[sid] = Array.isArray(r)?r[0]:r; });
+  const byNum = {}; sets.forEach(s=>{ byNum[s.set_number] = s; });
+
+  if(folder.exam_type==='subjectwise'){
     const bySubject={};
     sets.forEach(s=>{ (bySubject[s.subject||'General']=bySubject[s.subject||'General']||[]).push(s); });
     for(const subj in bySubject){
       if(myToken !== navToken) return;
       html += `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${subj}</div>`;
-      for(const s of bySubject[subj]) html += await setRow(s, isActive);
+      for(const s of bySubject[subj]) html += setRow(s, isActive, false, attemptBySet[s.id], rankBySet[s.id]);
     }
   } else {
     let allDone = true, anyDone = false;
     for(const s of sets){
-      if(myToken !== navToken) return;
-      const locked = EXAM_CONFIG[folder.exam_type].sequential && s.set_number>1 ? await isLocked(folder.id, s.set_number) : false;
-      html += await setRow(s, isActive, locked);
-      const { data: doneAtt } = await sb.from('attempts').select('id').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').maybeSingle();
-      if(doneAtt) anyDone = true; else allDone = false;
+      const prev = s.set_number>1 ? byNum[s.set_number-1] : null;
+      const locked = EXAM_CONFIG[folder.exam_type].sequential && prev ? !attemptBySet[prev.id] : false;
+      html += setRow(s, isActive, locked, attemptBySet[s.id], rankBySet[s.id]);
+      if(attemptBySet[s.id]) anyDone = true; else allDone = false;
     }
     // Whole-section total: counts every subsection's score/correct/total
     // together in one go (not one set at a time), so you see the overall
     // percentage and where you rank against everyone else on this section,
-    // as soon as you've submitted at least one subsection here.
+    // as soon as you've submitted at least one subsection here. Once every
+    // subsection is done, this becomes the full report card below.
     if(anyDone){
       const { data: fstats, error: fErr } = await sb.rpc('folder_rank_stats', { p_folder_id: folder.id, p_user_id: S.profile.id });
       if(myToken !== navToken) return;
       const frow = Array.isArray(fstats) ? fstats[0] : fstats;
       if(frow && frow.user_total){
         const fpct = Math.round((frow.user_correct/frow.user_total)*1000)/10;
-        html += `<div class="card" style="margin-top:14px;">
-          <h3>Section total (all ${frow.sets_total} subsections)</h3>
-          <div class="muted">✅ ${frow.user_correct}/${frow.user_total} correct (${fpct}%) · score ${frow.user_score>0?'+':''}${frow.user_score} · ${frow.sets_completed}/${frow.sets_total} subsections done</div>
-          <div class="muted" style="margin-top:4px;">${frow.rank ? `Rank ${frow.rank}/${frow.total_attempts} · ${frow.percentile}ᵗʰ percentile` : 'Not enough other users\' totals yet to rank against.'}</div>
-        </div>`;
+        if(!allDone){
+          html += `<div class="card" style="margin-top:14px;">
+            <h3>Section total so far (${frow.sets_completed}/${frow.sets_total} subsections)</h3>
+            <div class="muted">✅ ${frow.user_correct}/${frow.user_total} correct (${fpct}%) · score ${frow.user_score>0?'+':''}${frow.user_score}</div>
+            <div class="muted" style="margin-top:4px;">${frow.rank ? `Rank ${frow.rank}/${frow.total_attempts} · ${frow.percentile}ᵗʰ percentile` : 'Not enough other users\' totals yet to rank against.'}</div>
+          </div>`;
+        } else {
+          // Full report card — only built once, right when the section is
+          // finished, since it needs one extra (batched, single) query for
+          // every question's community accuracy to classify tough/easy.
+          const allQIds = [...new Set(sets.flatMap(s=>s.question_ids||[]))];
+          const { data: accStats } = await sb.rpc('question_accuracy_stats', { p_question_ids: allQIds });
+          if(myToken !== navToken) return;
+          let hard=0, med=0, easy=0;
+          (accStats||[]).forEach(s=>{
+            if(!s.total_attempts) return;
+            const acc = s.correct_attempts / s.total_attempts;
+            if(acc<=0.4) hard++; else if(acc<=0.7) med++; else easy++;
+          });
+          const maxCount = Math.max(hard, med, easy, 1);
+          html += `<div class="card reportcard" style="margin-top:16px;">
+            <h2>📋 Section report card</h2>
+            <div class="muted" style="margin-bottom:16px;">${folder.name} · all ${frow.sets_total} subsections complete</div>
+            <div class="row" style="align-items:center;gap:26px;flex-wrap:wrap;">
+              <div class="donut" style="--pct:${fpct}"><span>${fpct}%</span></div>
+              <div>
+                <div style="font-size:16px;"><b>${frow.user_correct}/${frow.user_total}</b> correct</div>
+                <div class="muted" style="margin-top:2px;">Score: ${frow.user_score>0?'+':''}${frow.user_score}</div>
+                <div class="muted" style="margin-top:2px;">${frow.rank ? `Rank ${frow.rank}/${frow.total_attempts} · ${frow.percentile}ᵗʰ percentile — updates as more people attempt` : 'Not enough other users\' totals yet to rank against.'}</div>
+              </div>
+            </div>
+            <div style="margin-top:24px;">
+              <div class="muted" style="margin-bottom:4px;">Question difficulty — based on how everyone has done on these so far</div>
+              <div class="diffbars">
+                <div class="diffbar"><div class="diffbar-count">${hard}</div><div class="diffbar-track"><div class="diffbar-fill hard" style="height:${Math.round(hard/maxCount*100)}%;"></div></div><div class="diffbar-label">🔴 Tough</div></div>
+                <div class="diffbar"><div class="diffbar-count">${med}</div><div class="diffbar-track"><div class="diffbar-fill med" style="height:${Math.round(med/maxCount*100)}%;"></div></div><div class="diffbar-label">🟡 Medium</div></div>
+                <div class="diffbar"><div class="diffbar-count">${easy}</div><div class="diffbar-track"><div class="diffbar-fill easy" style="height:${Math.round(easy/maxCount*100)}%;"></div></div><div class="diffbar-label">🟢 Easy</div></div>
+              </div>
+            </div>
+          </div>`;
+        }
       } else if(fErr){
         html += `<div class="card muted" style="margin-top:14px;">Section total isn't available yet — ask admin to run the ranking database update.</div>`;
       }
@@ -862,19 +1005,11 @@ async function loadFolderSets(isActive){
   const ftBtn = document.getElementById('fullTestBtn');
   if(ftBtn) ftBtn.onclick = ()=> loadFullTestReview(folder.id);
 }
-async function isLocked(folderId, setNumber){
-  const { data: prevSet } = await sb.from('sets').select('id').eq('folder_id', folderId).is('user_id', null).eq('set_number', setNumber-1).eq('set_type','main').maybeSingle();
-  if(!prevSet) return false;
-  const { data: att } = await sb.from('attempts').select('status').eq('user_id', S.profile.id).eq('set_id', prevSet.id).eq('status','submitted').maybeSingle();
-  return !att;
-}
-async function setRow(s, isActive, locked=false){
+function setRow(s, isActive, locked=false, att=null, rankRow=null){
   const n = s.question_ids.length;
-  const { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').order('submitted_at',{ascending:false}).limit(1).maybeSingle();
   let statsHtml = '';
   if(att){
-    const { data: stats } = await sb.rpc('set_rank_stats', { p_set_id: s.id, p_user_id: S.profile.id });
-    const row = Array.isArray(stats) ? stats[0] : stats;
+    const row = rankRow;
     // Percentage is always computed straight from this attempt's own
     // correct/total — it no longer depends on the rank RPC returning data,
     // so it still shows even when there's only one attempt so far (no one
@@ -914,6 +1049,11 @@ async function openReviewForSet(setId){
   // lazily per-question as you page through (see ensureQuestionImage).
   const { data: qs } = await sb.from('questions').select('id, q_text, options, correct_index, explanation, subject').in('id', s.question_ids);
   const questions = s.question_ids.map(id=>qs.find(q=>q.id===id)).filter(Boolean);
+  // Community accuracy per question, fetched once for the whole set (not
+  // per question) so paging through review stays instant.
+  const { data: accStats } = await sb.rpc('question_accuracy_stats', { p_question_ids: questions.map(q=>q.id) });
+  const accById = {}; (accStats||[]).forEach(a=>{ accById[a.question_id]=a; });
+  questions.forEach(q=>{ q._acc = accById[q.id] || null; });
   goTo({ review:{ att, set: s, questions, showExpl:false } });
 }
 async function loadFullTestReview(folderId){
@@ -929,6 +1069,9 @@ async function loadFullTestReview(folderId){
     totalScore += (att.score||0); totalCorrect += (att.correct_count||0); totalQ += (att.total_questions||ordered.length);
   }
   const fakeAtt = { id:null, answers: mergedAnswers, score: totalScore, correct_count: totalCorrect, total_questions: totalQ };
+  const { data: accStats } = await sb.rpc('question_accuracy_stats', { p_question_ids: allQuestions.map(q=>q.id) });
+  const accById = {}; (accStats||[]).forEach(a=>{ accById[a.question_id]=a; });
+  allQuestions.forEach(q=>{ q._acc = accById[q.id] || null; });
   goTo({ review:{ att: fakeAtt, set: {question_ids: allQuestions.map(q=>q.id)}, questions: allQuestions, showExpl:false } });
 }
 
@@ -1459,15 +1602,47 @@ async function submitAttempt(att, set, questions, auto){
   S.review = { att, set, questions, showExpl:false };
   renderReviewChoice();
 }
-function renderReviewChoice(){
-  app.innerHTML = `<div class="container" style="max-width:480px;padding-top:12vh;text-align:center;">
-    <div class="card">
-      <h2>Set submitted</h2>
-      <p class="muted">Score: ${S.review.att.score>0?'+':''}${S.review.att.score}</p>
-      <label style="display:flex;align-items:center;gap:8px;justify-content:center;text-transform:none;font-size:14px;color:var(--text);margin-top:10px;">
+async function renderReviewChoice(){
+  const { att, set, questions } = S.review;
+  const totalQ = att.total_questions ?? questions.length;
+  const pct = totalQ ? Math.round((att.correct_count||0)/totalQ*1000)/10 : 0;
+  let rankRow = null;
+  if(set && set.id){
+    const { data: rankStats } = await sb.rpc('set_rank_stats', { p_set_id: set.id, p_user_id: S.profile.id });
+    rankRow = Array.isArray(rankStats) ? rankStats[0] : rankStats;
+  }
+  const qIds = questions.map(q=>q.id);
+  const { data: accStats } = await sb.rpc('question_accuracy_stats', { p_question_ids: qIds });
+  let hard=0, med=0, easy=0;
+  (accStats||[]).forEach(s=>{
+    if(!s.total_attempts) return;
+    const acc = s.correct_attempts / s.total_attempts;
+    if(acc<=0.4) hard++; else if(acc<=0.7) med++; else easy++;
+  });
+  const maxCount = Math.max(hard, med, easy, 1);
+  app.innerHTML = `<div class="container" style="max-width:560px;padding-top:8vh;">
+    <div class="card reportcard">
+      <h2>📋 Report card</h2>
+      <div class="muted" style="margin-bottom:16px;">Score: ${att.score>0?'+':''}${att.score}</div>
+      <div class="row" style="align-items:center;gap:26px;flex-wrap:wrap;">
+        <div class="donut" style="--pct:${pct}"><span>${pct}%</span></div>
+        <div>
+          <div style="font-size:16px;"><b>${att.correct_count ?? 0}/${totalQ}</b> correct</div>
+          <div class="muted" style="margin-top:2px;">${rankRow && rankRow.rank ? `Rank ${rankRow.rank}/${rankRow.total_attempts} · ${rankRow.percentile}ᵗʰ percentile — updates as more people attempt` : 'Not enough other attempts yet to rank against.'}</div>
+        </div>
+      </div>
+      <div style="margin-top:24px;">
+        <div class="muted" style="margin-bottom:4px;">Question difficulty — based on how everyone has done on these so far</div>
+        <div class="diffbars">
+          <div class="diffbar"><div class="diffbar-count">${hard}</div><div class="diffbar-track"><div class="diffbar-fill hard" style="height:${Math.round(hard/maxCount*100)}%;"></div></div><div class="diffbar-label">🔴 Tough</div></div>
+          <div class="diffbar"><div class="diffbar-count">${med}</div><div class="diffbar-track"><div class="diffbar-fill med" style="height:${Math.round(med/maxCount*100)}%;"></div></div><div class="diffbar-label">🟡 Medium</div></div>
+          <div class="diffbar"><div class="diffbar-count">${easy}</div><div class="diffbar-track"><div class="diffbar-fill easy" style="height:${Math.round(easy/maxCount*100)}%;"></div></div><div class="diffbar-label">🟢 Easy</div></div>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin-top:22px;">
         <input type="checkbox" id="wrongOnlyChk" style="width:auto;"> Only show wrong answers
       </label>
-      <div class="row" style="justify-content:center;margin-top:14px;">
+      <div class="row" style="margin-top:14px;">
         <button class="primary" id="rwo">Review without explanation</button>
         <button class="subtle" id="rwith">Review with explanation</button>
         <button class="ghost" id="backHome">Back to dashboard</button>
@@ -1494,10 +1669,20 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
   const q = questions[i]; const a = att.answers[q.id];
   ensureQuestionImage(q, ()=>{ if(S.review && S.review.questions[S.review.questions.indexOf(q)]===q) renderReview(withExpl, i, wrongOnly); });
   const { data: existingCat } = await sb.from('categorizations').select('category').eq('user_id', S.profile.id).eq('question_id', q.id).maybeSingle();
+  const acc = q._acc;
+  const accPct = acc && acc.total_attempts ? Math.round((acc.correct_attempts/acc.total_attempts)*1000)/10 : null;
+  const accBar = `<div class="row" style="align-items:center;gap:10px;margin-bottom:10px;">
+    ${q.subject ? `<span class="badge unset" style="font-size:11px;">${q.subject}</span>` : ''}
+    <div class="row" style="flex:1;align-items:center;gap:8px;min-width:120px;">
+      <div class="accbar-track"><div class="accbar-fill" style="width:${accPct!=null?accPct:0}%;"></div></div>
+      <span class="muted" style="font-size:12px;white-space:nowrap;">${accPct!=null?`${accPct}% got it right`:'no data yet'}</span>
+    </div>
+  </div>`;
   app.innerHTML = `<div class="topbar"><div class="brand"><span class="dot"></span>Review ${i+1}/${questions.length} ${wrongOnly?'· wrong only':''}</div><button class="ghost" id="closeRev" style="padding:8px 12px;font-size:12px;">Close</button></div>
   <div class="container">
     <div class="reviewcard" id="revCapture">
       <div class="qmeta">Question ${i+1}</div>
+      ${accBar}
       <div style="font-weight:600;font-size:18.5px;line-height:1.55;">${q.image_url===undefined && q._imgFetching ? '<div class="muted" style="font-size:12px;margin-bottom:8px;">Loading image…</div>' : ''}${richBlock(q.q_text, q.image_url)}</div>
       <div id="revOpts"></div>
       ${withExpl?`<div class="divider"></div><div><b>Explanation</b>${renderRichText(q.explanation||'No explanation provided.')}</div>`:''}
@@ -1613,6 +1798,11 @@ async function adminUpload(){
     <div id="newQbWrap" style="margin-top:8px;">
       <label>New qbank name</label><input id="newQbName" placeholder="e.g. BTR Collection">
     </div>
+    <label>Topic (creates/uses a folder with this name in this platform)</label>
+    <input id="qbTopic" list="topicList" placeholder="e.g. Anatomy — leave blank to auto-detect from filename">
+    <datalist id="topicList"></datalist>
+    <label>Sub-topic (optional — nests as "Topic - Subtopic")</label>
+    <input id="qbSubtopic" placeholder="e.g. Upper Limb">
     <label>Files (.json / .ndjson) — select multiple</label>
     <input id="qbFiles" type="file" accept=".json,.ndjson,.txt" multiple>
     <label>Images (optional) — select every image file your JSON refers to by filename</label>
@@ -1626,7 +1816,15 @@ async function adminUpload(){
   const newWrap = document.getElementById('newQbWrap');
   const syncNewWrap = ()=>{ newWrap.style.display = qbSel.value==='__new__' ? 'block' : 'none'; };
   syncNewWrap();
-  qbSel.onchange = syncNewWrap;
+  async function refreshTopicList(){
+    const dl = document.getElementById('topicList');
+    if(qbSel.value==='__new__'){ dl.innerHTML=''; return; }
+    const { data: existingFolders } = await sb.from('folders').select('name').eq('qbank_id', qbSel.value);
+    const topics = [...new Set((existingFolders||[]).map(f=>folderGroupOf(f.name)))].sort();
+    dl.innerHTML = topics.map(t=>`<option value="${t.replace(/"/g,'&quot;')}"></option>`).join('');
+  }
+  qbSel.onchange = ()=>{ syncNewWrap(); refreshTopicList(); };
+  refreshTopicList();
 
   document.getElementById('qbUpload').onclick = async ()=>{
     const st=document.getElementById('upStatus');
@@ -1647,6 +1845,15 @@ async function adminUpload(){
     } else {
       explicitQbankId = qbSel.value;
     }
+
+    // Topic/Sub-topic typed here apply to every file in this batch, and
+    // decide the folder (and nested sub-folder) they land in for this
+    // platform — "Anatomy" + "Upper Limb" -> a folder named "Anatomy -
+    // Upper Limb", grouped under "Anatomy" in the Sections nav (same " - "
+    // convention folderGroupOf already uses for grouping).
+    const topicVal = document.getElementById('qbTopic').value.trim();
+    const subtopicVal = document.getElementById('qbSubtopic').value.trim();
+    const manualFolderName = topicVal ? (subtopicVal ? `${topicVal} - ${subtopicVal}` : topicVal) : null;
 
     // Upload any picked image files to Supabase Storage first, and build a
     // {lowercased original filename -> public URL} map. Questions below
@@ -1695,7 +1902,7 @@ async function adminUpload(){
           }
         }
 
-        const folderName = rows[0].folder || prettifyName(file.name);
+        const folderName = rows[0].folder || manualFolderName || prettifyName(file.name);
         // Auto-detect pattern from the file/section name: one of the 19 NEET PG
         // subjects (any short/full form) -> subjectwise; anything else
         // (gt1, gt2, neetpg, inicet, ...) -> auto_subsection.
@@ -1706,7 +1913,7 @@ async function adminUpload(){
         const explicitType = rows[0].exam_type && EXAM_CONFIG[rows[0].exam_type] ? rows[0].exam_type : null;
         const detection = explicitType
           ? { type: explicitType, subject: rows[0].subject || null }
-          : autoDetectExamType(rows[0].folder || file.name);
+          : autoDetectExamType(rows[0].folder || manualFolderName || file.name);
         let { data: folder } = await sb.from('folders').select('*').eq('qbank_id', qbankId).eq('name', folderName).maybeSingle();
         if(!folder){
           const ins = await sb.from('folders').insert({qbank_id:qbankId, name:folderName, exam_type:detection.type}).select().maybeSingle();
@@ -1873,8 +2080,8 @@ async function renderFolderList(){
 
   const wrap = document.getElementById('folderChecklistWrap');
   const folders = byCat[S.adminCategory];
-  const counts = await Promise.all(folders.map(f=>sb.from('questions').select('id',{count:'exact',head:true}).eq('folder_id',f.id)));
-  folders.forEach((f,i)=>{ f._count = counts[i].count; });
+  const countMap = await countsByFolder(folders.map(f=>f.id));
+  folders.forEach(f=>{ f._count = countMap[f.id]||0; });
   if(document.getElementById('adminCatSel') && document.getElementById('adminCatSel').value !== S.adminCategory) return; // stale, a newer category was picked meanwhile
 
   function groupOf(name){ return folderGroupOf(name); }
@@ -1978,6 +2185,7 @@ async function adminUsers(){
       <button class="primary saveBtn" style="padding:6px 10px;font-size:12px;">Save</button>
       <button class="${u.status==='active'?'danger':'subtle'} toggleBtn" style="padding:6px 10px;font-size:12px;">${u.status==='active'?'Revoke':'Activate'}</button>
       ${u.college_id_path?`<button class="ghost idBtn" style="padding:6px 10px;font-size:12px;">ID</button>`:''}
+      <button class="danger deleteBtn" style="padding:6px 10px;font-size:12px;">Delete</button>
     </td></tr>`).join('')}
   </table></div></div>`;
   body.querySelectorAll('tr[data-u]').forEach(tr=>{
@@ -2008,6 +2216,15 @@ async function adminUsers(){
       const { data, error } = await sb.storage.from('college-ids').createSignedUrl(u.college_id_path, 300);
       if(error || !data){ toast('Could not open ID — '+(error?.message||'')); return; }
       window.open(data.signedUrl, '_blank');
+    };
+    tr.querySelector('.deleteBtn').onclick = async ()=>{
+      const u = (users||[]).find(x=>x.id===uid);
+      if(!confirm(`Delete ${u?.name||u?.email||'this user'}? This removes their profile, devices, sets and rank history — this can't be undone.`)) return;
+      await sb.from('devices').delete().eq('user_id', uid);
+      const { error } = await sb.from('profiles').delete().eq('id', uid);
+      if(error){ toast('Delete failed — '+error.message); return; }
+      toast('User deleted');
+      adminUsers();
     };
   });
 }
