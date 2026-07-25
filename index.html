@@ -226,6 +226,16 @@ function folderGroupOf(name){
   const m = name.match(/^[^\d]+/);
   return (m ? m[0] : name).trim() || name;
 }
+// 3-level naming support: "Folder - Subfolder - Topic" (e.g. "Tests -
+// Subject Test - Anatomy") lets an admin define their own custom top-level
+// folder (shown as the big category card) with their own named subfolders
+// inside it (shown in the dropdown one level down), instead of relying on
+// the auto-detected 5-bucket category further below. Folder names with only
+// 1-2 " - " segments keep the old auto-detected behaviour untouched, so
+// nothing already uploaded changes.
+function nameParts(name){ return String(name||'').split(' - ').map(s=>s.trim()).filter(Boolean); }
+function subGroupOf(name){ const p = nameParts(name); return p.length>=3 ? p[1] : folderGroupOf(name); }
+function leafNameOf(name){ const p = nameParts(name); return p.length>=3 ? p.slice(2).join(' - ') : name; }
 const EXAM_CONFIG = {
   subjectwise:  {label:'Subject-wise', perSet:50, minutesPerFull:45, sequential:false},
   inicet:       {label:'INICET pattern',        perSet:50, minutesPerFull:45, sequential:true},
@@ -301,6 +311,8 @@ function detectPlatformName(name){
 // no extra Supabase query needed. Order here also drives display order.
 const CATEGORY_ORDER = ['Subject-wise','Tests','Grand Tests (GT)','NEET PG','INICET','FMGE','Other'];
 function categoryOf(f){
+  const p = nameParts(f.name);
+  if(p.length>=3) return p[0]; // admin-chosen custom top folder, used as-is
   if(f.exam_type==='subjectwise') return 'Subject-wise';
   const g = folderGroupOf(f.name).toLowerCase();
   if(f.exam_type==='inicet' || g.startsWith('inicet')) return 'INICET';
@@ -832,7 +844,7 @@ async function loadFolderList(isActive){
   // Within a category, folders can still be further grouped by name prefix
   // (e.g. inside "Subject-wise": "Anatomy - Abdomen", "Anatomy - Thorax" ->
   // "Anatomy"). Only shown if there's more than one group.
-  function groupOf(name){ return folderGroupOf(name); }
+  function groupOf(name){ return subGroupOf(name); }
   const groups = [...new Set(folders.map(f=>groupOf(f.name)))].sort();
 
   function renderList(filterGroup){
@@ -858,7 +870,7 @@ async function loadFolderList(isActive){
         const pct = rank && rank.user_total ? Math.round((rank.user_correct/rank.user_total)*1000)/10 : null;
         html += `<div class="qrow" data-folder="${f.id}" style="flex-direction:column;align-items:stretch;gap:5px;">
           <div class="row" style="justify-content:space-between;">
-            <b>${f.name}</b>
+            <b>${leafNameOf(f.name)}</b>
           </div>
           <div class="muted" style="font-size:13px;">${f._setCount||0} subsection${f._setCount===1?'':'s'} · ~${f._avgPerSet||0} question${f._avgPerSet===1?'':'s'} each · ${f._count||0} total${!f.exam_type?' · not set up yet':''}</div>
           ${pct!=null ? `<div class="muted" style="font-size:12.5px;color:var(--amber);">Your score: ${pct}%${rank.rank?` · ${rank.percentile}ᵗʰ percentile (updates as more people attempt)`:' · not enough attempts yet to rank'}</div>` : ''}
@@ -896,7 +908,7 @@ async function loadFolderSets(isActive){
   if(myToken !== navToken) return;
   const { data: folder } = await sb.from('folders').select('*').eq('id', S.nav.folderId).maybeSingle();
   if(myToken !== navToken) return;
-  body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank', onClick:true},{label:S.nav.category, onClick:true},{label:folder?.name||'Section'}]);
+  body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank', onClick:true},{label:S.nav.category, onClick:true},{label: folder ? leafNameOf(folder.name) : 'Section'}]);
   document.querySelector('[data-crumb="0"]').onclick = ()=>{ goTo({nav:{}}); };
   document.querySelector('[data-crumb="1"]').onclick = ()=>{ goTo({nav:{qbankId:S.nav.qbankId}}); };
   document.querySelector('[data-crumb="2"]').onclick = ()=>{ goTo({nav:{qbankId:S.nav.qbankId, category:S.nav.category}}); };
@@ -1798,11 +1810,14 @@ async function adminUpload(){
     <div id="newQbWrap" style="margin-top:8px;">
       <label>New qbank name</label><input id="newQbName" placeholder="e.g. BTR Collection">
     </div>
-    <label>Topic (creates/uses a folder with this name in this platform)</label>
-    <input id="qbTopic" list="topicList" placeholder="e.g. Anatomy — leave blank to auto-detect from filename">
+    <label>Folder (top-level, e.g. "Tests" — leave blank to auto-detect from filename)</label>
+    <input id="qbTopic" list="topicList" placeholder="e.g. Tests">
     <datalist id="topicList"></datalist>
-    <label>Sub-topic (optional — nests as "Topic - Subtopic")</label>
-    <input id="qbSubtopic" placeholder="e.g. Upper Limb">
+    <label>Subfolder (optional, e.g. "Subject Test" / "GT" / "NEET PG")</label>
+    <input id="qbSubtopic" list="subfolderList" placeholder="e.g. Subject Test">
+    <datalist id="subfolderList"></datalist>
+    <label>Subject / Topic (optional, e.g. "Anatomy" — the actual section admin generates a pattern for)</label>
+    <input id="qbSubject" placeholder="e.g. Anatomy — leave blank to use the filename">
     <label>Files (.json / .ndjson) — select multiple</label>
     <input id="qbFiles" type="file" accept=".json,.ndjson,.txt" multiple>
     <label>Images (optional) — select every image file your JSON refers to by filename</label>
@@ -1816,14 +1831,32 @@ async function adminUpload(){
   const newWrap = document.getElementById('newQbWrap');
   const syncNewWrap = ()=>{ newWrap.style.display = qbSel.value==='__new__' ? 'block' : 'none'; };
   syncNewWrap();
+  // Folder suggestions = every existing top-level folder name (first " - "
+  // segment) already used in this platform, e.g. "Tests", "Subject-wise".
+  // Subfolder suggestions narrow further: only the subfolders that already
+  // exist *inside whichever Folder is currently typed* (2nd segment of any
+  // 3-part name sharing that same first segment).
+  let existingFolderNames = [];
   async function refreshTopicList(){
     const dl = document.getElementById('topicList');
-    if(qbSel.value==='__new__'){ dl.innerHTML=''; return; }
+    if(qbSel.value==='__new__'){ dl.innerHTML=''; existingFolderNames=[]; return; }
     const { data: existingFolders } = await sb.from('folders').select('name').eq('qbank_id', qbSel.value);
-    const topics = [...new Set((existingFolders||[]).map(f=>folderGroupOf(f.name)))].sort();
+    existingFolderNames = (existingFolders||[]).map(f=>f.name);
+    const topics = [...new Set(existingFolderNames.map(n=>nameParts(n)[0]))].sort();
     dl.innerHTML = topics.map(t=>`<option value="${t.replace(/"/g,'&quot;')}"></option>`).join('');
+    refreshSubfolderList();
+  }
+  function refreshSubfolderList(){
+    const dl = document.getElementById('subfolderList');
+    const topicVal = document.getElementById('qbTopic').value.trim();
+    const subs = [...new Set(existingFolderNames
+      .filter(n=>nameParts(n)[0]===topicVal)
+      .map(n=>nameParts(n)[1])
+      .filter(Boolean))].sort();
+    dl.innerHTML = subs.map(s=>`<option value="${s.replace(/"/g,'&quot;')}"></option>`).join('');
   }
   qbSel.onchange = ()=>{ syncNewWrap(); refreshTopicList(); };
+  document.getElementById('qbTopic').addEventListener('input', refreshSubfolderList);
   refreshTopicList();
 
   document.getElementById('qbUpload').onclick = async ()=>{
@@ -1846,14 +1879,18 @@ async function adminUpload(){
       explicitQbankId = qbSel.value;
     }
 
-    // Topic/Sub-topic typed here apply to every file in this batch, and
-    // decide the folder (and nested sub-folder) they land in for this
-    // platform — "Anatomy" + "Upper Limb" -> a folder named "Anatomy -
-    // Upper Limb", grouped under "Anatomy" in the Sections nav (same " - "
-    // convention folderGroupOf already uses for grouping).
+    // Folder / Subfolder / Subject typed here apply to every file in this
+    // batch, and decide where they land in the Sections nav — "Tests" +
+    // "Subject Test" + "Anatomy" -> a folder named "Tests - Subject Test -
+    // Anatomy". "Tests" shows as its own top-level category card, "Subject
+    // Test" (and sibling subfolders like "GT", "NEET PG", "FMGE") show as a
+    // dropdown one level in, and "Anatomy" is the actual section admin
+    // generates a pattern for and students open sets from. Leaving
+    // Subfolder/Subject blank falls back to the old 1-2 level behaviour.
     const topicVal = document.getElementById('qbTopic').value.trim();
     const subtopicVal = document.getElementById('qbSubtopic').value.trim();
-    const manualFolderName = topicVal ? (subtopicVal ? `${topicVal} - ${subtopicVal}` : topicVal) : null;
+    const subjectVal = document.getElementById('qbSubject').value.trim();
+    const manualFolderName = [topicVal, subtopicVal, subjectVal].filter(Boolean).join(' - ') || null;
 
     // Upload any picked image files to Supabase Storage first, and build a
     // {lowercased original filename -> public URL} map. Questions below
@@ -2084,7 +2121,7 @@ async function renderFolderList(){
   folders.forEach(f=>{ f._count = countMap[f.id]||0; });
   if(document.getElementById('adminCatSel') && document.getElementById('adminCatSel').value !== S.adminCategory) return; // stale, a newer category was picked meanwhile
 
-  function groupOf(name){ return folderGroupOf(name); }
+  function groupOf(name){ return subGroupOf(name); }
   const groups = [...new Set(folders.map(f=>groupOf(f.name)))].sort();
 
   function renderChecklist(filterGroup){
@@ -2112,7 +2149,7 @@ async function renderFolderList(){
     for(const f of visible){
       const cfg = EXAM_CONFIG[f.exam_type];
       html += `<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:8px 0;">
-        <input type="checkbox" value="${f.id}" class="folderChk" style="width:auto;"> ${f.name} <span class="muted">(${f._count||0} questions — currently: ${cfg?cfg.label:'not set'})</span></label>`;
+        <input type="checkbox" value="${f.id}" class="folderChk" style="width:auto;"> ${leafNameOf(f.name)} <span class="muted">(${f._count||0} questions — currently: ${cfg?cfg.label:'not set'})</span></label>`;
     }
     html += `</div>`;
     wrap.innerHTML = html;
