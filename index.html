@@ -2080,12 +2080,22 @@ async function adminUpload(){
             folder.exam_type = detection.type;
           }
           const { count: existingSetCount } = await sb.from('sets').select('id', {count:'exact', head:true}).eq('folder_id', folder.id).is('user_id', null);
-          if(!existingSetCount || patternIsStale){
+          // Regenerate whenever this run actually added new rows to the
+          // folder — not just when it had zero sets before. A folder's
+          // questions can legitimately arrive split across several files
+          // (a big export chunked into parts, or a topic re-uploaded
+          // later); if we only regenerated on first creation, every part
+          // after the first would insert real rows into "questions" that
+          // never made it into any set, showing up as "0 total" even
+          // though the rows are sitting in the database. Skip the (slow)
+          // regeneration only when this file added nothing new AND sets
+          // already exist.
+          if(inserted>0 || !existingSetCount || patternIsStale){
             const n = await generateSetsForFolder(folder);
-            log.push(patternIsStale ? `   ↳ pattern updated to "${EXAM_CONFIG[folder.exam_type]?.label||folder.exam_type}" and regenerated: ${n} set(s).` : `   ↳ auto-split into ${n} set(s).`);
+            log.push(patternIsStale ? `   ↳ pattern updated to "${EXAM_CONFIG[folder.exam_type]?.label||folder.exam_type}" and regenerated: ${n} set(s).` : `   ↳ ${existingSetCount?'refreshed':'auto-split into'} ${n} set(s).`);
             st.textContent = log.join('\n');
           } else {
-            log.push(`   ↳ section already has sets — go to "Sections" tab and re-generate if you want these new questions included.`);
+            log.push(`   ↳ no new questions in this file for this section — sets unchanged.`);
             st.textContent = log.join('\n');
           }
         } // end per-folder-group loop
