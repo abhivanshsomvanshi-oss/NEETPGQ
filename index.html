@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{
   --bg:#070B14; --surface:#111726; --surface-2:#182034; --surface-3:#1F2A42; --border:#28324E;
@@ -235,7 +236,7 @@ function folderGroupOf(name){
 // nothing already uploaded changes.
 function nameParts(name){ return String(name||'').split(' - ').map(s=>s.trim()).filter(Boolean); }
 function subGroupOf(name){ const p = nameParts(name); return p.length>=3 ? p[1] : folderGroupOf(name); }
-function leafNameOf(name){ const p = nameParts(name); return p.length>=3 ? p.slice(2).join(' - ') : name; }
+function leafNameOf(name){ const p = nameParts(name); if(p.length>=3) return p.slice(2).join(' - '); if(p.length===2) return p[1]; return name; }
 const EXAM_CONFIG = {
   subjectwise:  {label:'Subject-wise', perSet:50, minutesPerFull:45, sequential:false},
   inicet:       {label:'INICET pattern',        perSet:50, minutesPerFull:45, sequential:true},
@@ -294,13 +295,16 @@ function autoDetectExamType(name){
 const PLATFORM_ALIASES = {
   'BTR': ['btr'],
   'Prepladder': ['prepladder'],
+  'Marrow': ['marrow'],
+  'Doc Tutorial': ['doctutorial','doctutorials','doctut'],
+  'DAMS': ['dams'],
 };
 function detectPlatformName(name){
-  const tokens = String(name||'').toLowerCase().replace(/\.(json|ndjson|txt)$/,'').split(/[^a-z0-9]+/).filter(Boolean);
-  for(const tok of tokens){
-    for(const platform in PLATFORM_ALIASES){
-      if(PLATFORM_ALIASES[platform].includes(tok)) return platform;
-    }
+  const lower = String(name||'').toLowerCase().replace(/\.(json|ndjson|txt)$/,'');
+  const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+  const squashed = tokens.join(''); // handles multi-word platform names like "Doc Tutorial" -> "doctutorial"
+  for(const platform in PLATFORM_ALIASES){
+    if(PLATFORM_ALIASES[platform].some(a=>tokens.includes(a) || squashed.includes(a))) return platform;
   }
   return null;
 }
@@ -309,11 +313,11 @@ function detectPlatformName(name){
 // Buckets a folder into one of the 5 top-level categories the user browses
 // by, computed purely from data already on hand (folder name + exam_type) —
 // no extra Supabase query needed. Order here also drives display order.
-const CATEGORY_ORDER = ['Subject-wise','Tests','Grand Tests (GT)','NEET PG','INICET','FMGE','Other'];
+const CATEGORY_ORDER = ['Subjectwise Qbank','Tests','Grand Tests (GT)','NEET PG','INICET','FMGE','Other'];
 function categoryOf(f){
   const p = nameParts(f.name);
-  if(p.length>=3) return p[0]; // admin-chosen custom top folder, used as-is
-  if(f.exam_type==='subjectwise') return 'Subject-wise';
+  if(p.length>=2) return p[0]; // explicit admin/pipeline-chosen top folder always wins
+  if(f.exam_type==='subjectwise') return 'Subjectwise Qbank';
   const g = folderGroupOf(f.name).toLowerCase();
   if(f.exam_type==='inicet' || g.startsWith('inicet')) return 'INICET';
   if(f.exam_type==='neetpg' || f.exam_type==='updated_neetpg' || g.startsWith('neetpg') || g.startsWith('neet pg') || g.startsWith('neet')) return 'NEET PG';
@@ -323,7 +327,7 @@ function categoryOf(f){
   return 'Other';
 }
 
-let S = { session:null, profile:null, deviceId:null, view:'loading', nav:{} };
+let S = { session:null, profile:null, deviceId:null, view:'loading', nav:{}, instructionsAcked:{} };
 
 // ---------- theme (dark / light) ----------
 function applyTheme(){
@@ -934,6 +938,36 @@ async function loadFolderSets(isActive){
   const rankBySet = {};
   attemptedIds.forEach((sid,i)=>{ const r = rankResults[i].data; rankBySet[sid] = Array.isArray(r)?r[0]:r; });
   const byNum = {}; sets.forEach(s=>{ byNum[s.set_number] = s; });
+
+  // For full-length sequential patterns (INICET / NEET PG / auto-subsection —
+  // anything that isn't the subject-wise practice mode), show a one-time
+  // instructions screen with a "Start Exam" button before the section's
+  // sets are revealed, the first time this user opens it with nothing
+  // attempted yet. Re-opening later (or once something's been attempted)
+  // skips straight to the sets list as before.
+  const cfg = EXAM_CONFIG[folder.exam_type];
+  if(cfg && cfg.sequential && attemptedIds.length===0 && !(S.instructionsAcked && S.instructionsAcked[folder.id])){
+    const totalQ = sets.reduce((n,s)=>n+(s.question_ids?.length||0),0);
+    const totalMin = Math.round(sets.reduce((n,s)=>n+(s.duration_minutes||0),0));
+    document.getElementById('utabBody').innerHTML += `<div class="card">
+      <h3>📋 Before you start — ${leafNameOf(folder.name)}</h3>
+      <ul style="margin:10px 0; padding-left:20px; line-height:1.7;">
+        <li>This section has <b>${totalQ} questions</b> split into <b>${sets.length} timed set${sets.length===1?'':'s'}</b>, totaling <b>${totalMin} minutes</b>.</li>
+        <li>Each set has its <b>own timer</b>. When a set's timer runs out, it auto-submits with whatever you've answered so far.</li>
+        <li>Sets must be done <b>in order</b> — a set unlocks only after you submit the one before it. You can't go back and reopen a submitted set.</li>
+        <li>Don't refresh, close the tab, or switch apps mid-set — the timer keeps running in the background regardless.</li>
+        <li>Attempt every question if you can; there's no going back once a set is submitted, so mark your best answer before time runs out.</li>
+        <li>Once every set is submitted, you'll see your full report card — score, rank, and question-difficulty breakdown.</li>
+      </ul>
+      <button class="primary" id="startExamBtn" style="margin-top:6px;">Start Exam</button>
+    </div>`;
+    document.getElementById('startExamBtn').onclick = ()=>{
+      S.instructionsAcked = S.instructionsAcked || {};
+      S.instructionsAcked[folder.id] = true;
+      loadFolderSets(isActive);
+    };
+    return;
+  }
 
   if(folder.exam_type==='subjectwise'){
     const bySubject={};
@@ -1818,8 +1852,9 @@ async function adminUpload(){
     <datalist id="subfolderList"></datalist>
     <label>Subject / Topic (optional, e.g. "Anatomy" — the actual section admin generates a pattern for)</label>
     <input id="qbSubject" placeholder="e.g. Anatomy — leave blank to use the filename">
-    <label>Files (.json / .ndjson) — select multiple</label>
-    <input id="qbFiles" type="file" accept=".json,.ndjson,.txt" multiple>
+    <label>Files — .json / .ndjson, or a .zip full of them (select multiple)</label>
+    <input id="qbFiles" type="file" accept=".json,.ndjson,.txt,.zip" multiple>
+    <p class="muted" style="margin:-4px 0 10px;font-size:12px;">Drop a whole platform's .zip in here — every .json/.ndjson inside is read automatically. A row's own "folder" field always wins; otherwise, a file's own folder path inside the zip (e.g. "qbank/Anatomy.json") is used as its section name.</p>
     <label>Images (optional) — select every image file your JSON refers to by filename</label>
     <input id="qbImages" type="file" accept="image/*" multiple>
     <button class="primary" id="qbUpload" style="margin-top:14px;">Parse & upload</button>
@@ -1861,8 +1896,35 @@ async function adminUpload(){
 
   document.getElementById('qbUpload').onclick = async ()=>{
     const st=document.getElementById('upStatus');
-    const files = [...document.getElementById('qbFiles').files];
+    let files = [...document.getElementById('qbFiles').files];
     if(!files.length){ st.textContent='Choose at least one file.'; return; }
+
+    // Zip support: expand any .zip into its individual .json/.ndjson/.txt
+    // entries, each becoming a file-like object the rest of this function
+    // can treat exactly like a normally-picked file. A zip entry's own
+    // folder path inside the archive (e.g. "qbank/Anatomy.json" ->
+    // "Qbank - Anatomy") is carried along as _zipDir, used as a fallback
+    // section name below whenever a row doesn't declare its own "folder".
+    const zipFiles = files.filter(f=>/\.zip$/i.test(f.name));
+    if(zipFiles.length){
+      st.textContent = `Reading ${zipFiles.length} zip file(s)…`;
+      const expanded = [];
+      for(const zf of zipFiles){
+        try{
+          const zip = await JSZip.loadAsync(zf);
+          const entries = Object.values(zip.files).filter(e=>!e.dir && /\.(json|ndjson|txt)$/i.test(e.name));
+          for(const entry of entries){
+            const content = await entry.async('string');
+            const parts = entry.name.split('/').filter(Boolean);
+            const base = parts.pop();
+            const zipDir = parts.length ? parts.map(prettifyName).join(' - ') : null;
+            expanded.push({ name: `${zf.name.replace(/\.zip$/i,'')}/${entry.name}`, _zipDir: zipDir, text: async ()=>content });
+          }
+        }catch(e){ st.textContent = `${zf.name}: couldn't read zip — ${e?.message||e}`; }
+      }
+      files = files.filter(f=>!/\.zip$/i.test(f.name)).concat(expanded);
+      st.textContent = `Zip(s) expanded to ${expanded.length} file(s). Starting upload…`;
+    }
 
     let explicitQbankId = null;
     if(qbSel.value==='__new__'){
@@ -1939,78 +2001,94 @@ async function adminUpload(){
           }
         }
 
-        const folderName = rows[0].folder || manualFolderName || prettifyName(file.name);
-        // Auto-detect pattern from the file/section name: one of the 19 NEET PG
-        // subjects (any short/full form) -> subjectwise; anything else
-        // (gt1, gt2, neetpg, inicet, ...) -> auto_subsection.
-        // A file can explicitly declare its own pattern via an "exam_type"
-        // field on its first row (e.g. "topicwise") — this always wins over
-        // name-based guessing. Falls back to the old auto-detection for
-        // files that don't set it, so nothing already uploaded is affected.
-        const explicitType = rows[0].exam_type && EXAM_CONFIG[rows[0].exam_type] ? rows[0].exam_type : null;
-        const detection = explicitType
-          ? { type: explicitType, subject: rows[0].subject || null }
-          : autoDetectExamType(rows[0].folder || manualFolderName || file.name);
-        let { data: folder } = await sb.from('folders').select('*').eq('qbank_id', qbankId).eq('name', folderName).maybeSingle();
-        if(!folder){
-          const ins = await sb.from('folders').insert({qbank_id:qbankId, name:folderName, exam_type:detection.type}).select().maybeSingle();
-          if(ins.error || !ins.data){ log.push(`${file.name}: couldn't create section "${folderName}" — ${ins.error?.message || 'unknown error'}`); st.textContent = log.join('\n'); continue; }
-          folder = ins.data;
-        }
-        const { count: existingCount } = await sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', folder.id);
-        const payload = rows.map((r,i)=>({
-          qbank_id: qbankId,
-          folder_id: folder.id,
-          q_text: resolveInlineImages(r.question||r.q_text||r.q||'', imageMap),
-          options: (r.options||r.opts||[]).map(o=>resolveInlineImages(o, imageMap)),
-          correct_index: typeof r.answer==='number'?r.answer: typeof r.correct_index==='number'?r.correct_index: letterToIndex(r.answer||r.correct),
-          explanation: resolveInlineImages(r.explanation||r.expl||'', imageMap),
-          image_url: resolveImageField(r.image_url||r.image||null, imageMap),
-          subject: r.subject || detection.subject || folderName,
-          order_index: (existingCount||0) + i,
-        })).filter(q=>q.q_text && q.options?.length);
+        // Group rows by their OWN "folder" field when present (this is how
+        // pre-tagged bulk exports work — every question already carries the
+        // exact section it belongs to), falling back to the manual
+        // Folder/Subfolder/Subject fields or the filename when a row has no
+        // "folder" of its own. This lets one uploaded file contain
+        // thousands of questions destined for many different sections in
+        // one shot, instead of requiring one file per section.
+        const groups = new Map(); // folderName -> rows[]
+        rows.forEach(r=>{
+          const fn = r.folder || file._zipDir || manualFolderName || prettifyName(file.name);
+          if(!groups.has(fn)) groups.set(fn, []);
+          groups.get(fn).push(r);
+        });
 
-        // Insert in chunks so one giant request can't stall silently and
-        // progress shows up as it goes, instead of one all-or-nothing insert.
-        const CHUNK = 200;
-        let inserted = 0, chunkErr = null;
-        for(let start=0; start<payload.length; start+=CHUNK){
-          const chunk = payload.slice(start, start+CHUNK);
-          const { error: insErr } = await sb.from('questions').insert(chunk);
-          if(insErr){ chunkErr = insErr; break; }
-          inserted += chunk.length;
-          st.textContent = log.join('\n') + `\n${file.name}: ${inserted}/${payload.length} questions uploaded…`;
-        }
-        if(chunkErr){ log.push(`${file.name}: upload error after ${inserted}/${payload.length} questions — ${chunkErr.message}`); st.textContent = log.join('\n'); continue; }
+        let fileInserted = 0, fileQuestionTotal = 0;
+        for(const [folderName, groupRows] of groups){
+          const r0 = groupRows[0];
+          const explicitType = r0.exam_type && EXAM_CONFIG[r0.exam_type] ? r0.exam_type : null;
+          // Auto-detect pattern from the file/section name: one of the 19 NEET PG
+          // subjects (any short/full form) -> subjectwise; anything else
+          // (gt1, gt2, neetpg, inicet, ...) -> auto_subsection.
+          // A row can explicitly declare its own pattern via "exam_type"
+          // (e.g. "subjectwise") — this always wins over name-based guessing.
+          const detection = explicitType
+            ? { type: explicitType, subject: r0.subject || null }
+            : autoDetectExamType(folderName);
+          let { data: folder } = await sb.from('folders').select('*').eq('qbank_id', qbankId).eq('name', folderName).maybeSingle();
+          if(!folder){
+            const ins = await sb.from('folders').insert({qbank_id:qbankId, name:folderName, exam_type:detection.type}).select().maybeSingle();
+            if(ins.error || !ins.data){ log.push(`${file.name} → "${folderName}": couldn't create section — ${ins.error?.message || 'unknown error'}`); st.textContent = log.join('\n'); continue; }
+            folder = ins.data;
+          }
+          const { count: existingCount } = await sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', folder.id);
+          const payload = groupRows.map((r,i)=>({
+            qbank_id: qbankId,
+            folder_id: folder.id,
+            q_text: resolveInlineImages(r.question||r.q_text||r.q||'', imageMap),
+            options: (r.options||r.opts||[]).map(o=>resolveInlineImages(o, imageMap)),
+            correct_index: typeof r.answer==='number'?r.answer: typeof r.correct_index==='number'?r.correct_index: letterToIndex(r.answer||r.correct),
+            explanation: resolveInlineImages(r.explanation||r.expl||'', imageMap),
+            image_url: resolveImageField(r.image_url||r.image||null, imageMap),
+            subject: r.subject || detection.subject || folderName,
+            order_index: (existingCount||0) + i,
+          })).filter(q=>q.q_text && q.options?.length);
 
-        const patternLabel = EXAM_CONFIG[folder.exam_type]?.label || detection.type;
-        log.push(`${file.name} → ${qbankLabel?`qbank "${qbankLabel}" / `:''}section "${folderName}": ${inserted} questions added. Pattern: ${patternLabel}${detection.subject?` (subject: ${detection.subject})`:''}.`);
-        st.textContent = log.join('\n');
+          // Insert in chunks so one giant request can't stall silently and
+          // progress shows up as it goes, instead of one all-or-nothing insert.
+          const CHUNK = 200;
+          let inserted = 0, chunkErr = null;
+          for(let start=0; start<payload.length; start+=CHUNK){
+            const chunk = payload.slice(start, start+CHUNK);
+            const { error: insErr } = await sb.from('questions').insert(chunk);
+            if(insErr){ chunkErr = insErr; break; }
+            inserted += chunk.length;
+            st.textContent = log.join('\n') + `\n${file.name}: ${fileInserted+inserted}/${fileQuestionTotal||'?'} questions uploaded so far ("${folderName}" ${inserted}/${payload.length})…`;
+          }
+          if(chunkErr){ log.push(`${file.name} → "${folderName}": upload error after ${inserted}/${payload.length} questions — ${chunkErr.message}`); st.textContent = log.join('\n'); continue; }
+          fileInserted += inserted; fileQuestionTotal += payload.length;
 
-        // Auto-generate sets right away. If the folder already existed from
-        // an earlier upload, its exam_type could be stale (e.g. created
-        // before this file started declaring "exam_type" explicitly, or
-        // uploaded once under a different pattern). When the file makes an
-        // explicit pattern declaration that disagrees with what's stored,
-        // treat that as authoritative, update it, and regenerate — this is
-        // what stops "half the sections are 50q/45min, half are topic-wise"
-        // from happening on a re-upload. If no explicit pattern is declared
-        // we keep the old hands-off behaviour (only set on first creation,
-        // never silently overwritten).
-        const patternIsStale = explicitType && folder.exam_type !== explicitType;
-        if(!folder.exam_type || patternIsStale){
-          await sb.from('folders').update({exam_type:detection.type}).eq('id', folder.id);
-          folder.exam_type = detection.type;
-        }
-        const { count: existingSetCount } = await sb.from('sets').select('id', {count:'exact', head:true}).eq('folder_id', folder.id).is('user_id', null);
-        if(!existingSetCount || patternIsStale){
-          const n = await generateSetsForFolder(folder);
-          log.push(patternIsStale ? `   ↳ pattern updated to "${EXAM_CONFIG[folder.exam_type]?.label||folder.exam_type}" and regenerated: ${n} set(s).` : `   ↳ auto-split into ${n} set(s).`);
+          const patternLabel = EXAM_CONFIG[folder.exam_type]?.label || detection.type;
+          log.push(`${file.name} → ${qbankLabel?`qbank "${qbankLabel}" / `:''}section "${folderName}": ${inserted} questions added. Pattern: ${patternLabel}${detection.subject?` (subject: ${detection.subject})`:''}.`);
           st.textContent = log.join('\n');
-        } else {
-          log.push(`   ↳ section already has sets — go to "Sections" tab and re-generate if you want these new questions included.`);
-          st.textContent = log.join('\n');
-        }
+
+          // Auto-generate sets right away. If the folder already existed from
+          // an earlier upload, its exam_type could be stale (e.g. created
+          // before this file started declaring "exam_type" explicitly, or
+          // uploaded once under a different pattern). When the file makes an
+          // explicit pattern declaration that disagrees with what's stored,
+          // treat that as authoritative, update it, and regenerate — this is
+          // what stops "half the sections are 50q/45min, half are topic-wise"
+          // from happening on a re-upload. If no explicit pattern is declared
+          // we keep the old hands-off behaviour (only set on first creation,
+          // never silently overwritten).
+          const patternIsStale = explicitType && folder.exam_type !== explicitType;
+          if(!folder.exam_type || patternIsStale){
+            await sb.from('folders').update({exam_type:detection.type}).eq('id', folder.id);
+            folder.exam_type = detection.type;
+          }
+          const { count: existingSetCount } = await sb.from('sets').select('id', {count:'exact', head:true}).eq('folder_id', folder.id).is('user_id', null);
+          if(!existingSetCount || patternIsStale){
+            const n = await generateSetsForFolder(folder);
+            log.push(patternIsStale ? `   ↳ pattern updated to "${EXAM_CONFIG[folder.exam_type]?.label||folder.exam_type}" and regenerated: ${n} set(s).` : `   ↳ auto-split into ${n} set(s).`);
+            st.textContent = log.join('\n');
+          } else {
+            log.push(`   ↳ section already has sets — go to "Sections" tab and re-generate if you want these new questions included.`);
+            st.textContent = log.join('\n');
+          }
+        } // end per-folder-group loop
       }catch(err){
         // Catches anything unexpected (network drop, a null reference, etc.)
         // so a single bad file can never silently freeze the whole upload —
