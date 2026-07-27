@@ -237,6 +237,30 @@ function folderGroupOf(name){
 function nameParts(name){ return String(name||'').split(' - ').map(s=>s.trim()).filter(Boolean); }
 function subGroupOf(name){ const p = nameParts(name); return p.length>=3 ? p[1] : folderGroupOf(name); }
 function leafNameOf(name){ const p = nameParts(name); if(p.length>=3) return p.slice(2).join(' - '); if(p.length===2) return p[1]; return name; }
+// Plain alphabetical sort puts "GT 10" before "GT 2" (string comparison
+// compares character-by-character, so '1' < '2' regardless of what follows).
+// This compares embedded number runs as actual numbers instead, so a list
+// like GT1, GT2, GT14, GT30 comes out in true numeric/serial order rather
+// than GT1, GT14, GT2, GT30.
+function naturalCompare(a, b){
+  const ax = String(a||'').match(/\d+|\D+/g) || [];
+  const bx = String(b||'').match(/\d+|\D+/g) || [];
+  const len = Math.max(ax.length, bx.length);
+  for(let i=0;i<len;i++){
+    const av = ax[i], bv = bx[i];
+    if(av===undefined) return -1;
+    if(bv===undefined) return 1;
+    const an = /^\d+$/.test(av), bn = /^\d+$/.test(bv);
+    if(an && bn){
+      const diff = parseInt(av,10) - parseInt(bv,10);
+      if(diff) return diff;
+    } else {
+      const cmp = av.localeCompare(bv);
+      if(cmp) return cmp;
+    }
+  }
+  return 0;
+}
 const EXAM_CONFIG = {
   subjectwise:  {label:'Subject-wise', perSet:50, minutesPerFull:45, sequential:false},
   inicet:       {label:'INICET pattern',        perSet:50, minutesPerFull:45, sequential:true},
@@ -822,28 +846,7 @@ async function loadFolderList(isActive){
   const { data: allFolders } = await sb.from('folders').select('*').eq('qbank_id', S.nav.qbankId).order('name');
   if(myToken !== navToken) return;
   const folders = (allFolders||[]).filter(f=>categoryOf(f)===S.nav.category);
-  // One round trip for all folder counts in this category, instead of one
-  // count query per folder — this was the main lag when opening a platform.
-  const countMap = await countsByFolder(folders.map(f=>f.id));
-  if(myToken !== navToken) return;
-  folders.forEach(f=>{ f._count = countMap[f.id]||0; });
-
-  // How many subsections ("sub-folders") each section splits into, and this
-  // user's live score/percentile per section — both batched (one query +
-  // one set of parallel RPC calls) instead of a query per folder, so this
-  // stays as fast as the plain count above.
-  const { data: setRows } = await sb.from('sets').select('folder_id').is('user_id', null).eq('set_type','main').in('folder_id', folders.map(f=>f.id));
-  if(myToken !== navToken) return;
-  const setCountMap = {};
-  (setRows||[]).forEach(r=>{ setCountMap[r.folder_id] = (setCountMap[r.folder_id]||0)+1; });
-  const rankResults = await Promise.all(folders.map(f=>sb.rpc('folder_rank_stats', { p_folder_id: f.id, p_user_id: S.profile.id })));
-  if(myToken !== navToken) return;
-  folders.forEach((f,i)=>{
-    f._setCount = setCountMap[f.id]||0;
-    f._avgPerSet = f._setCount ? Math.round((f._count||0)/f._setCount) : (f._count||0);
-    const r = rankResults[i]?.data; const row = Array.isArray(r)?r[0]:r;
-    f._rank = (row && row.sets_completed) ? row : null;
-  });
+  folders.sort((a,b)=>naturalCompare(leafNameOf(a.name), leafNameOf(b.name)));
 
   // Within a category, folders can still be further grouped by name prefix
   // (e.g. inside "Subject-wise": "Anatomy - Abdomen", "Anatomy - Thorax" ->
@@ -851,7 +854,7 @@ async function loadFolderList(isActive){
   function groupOf(name){ return subGroupOf(name); }
   const groups = [...new Set(folders.map(f=>groupOf(f.name)))].sort();
 
-  function renderList(filterGroup){
+  function renderList(filterGroup, loading){
     if(myToken !== navToken) return;
     let html = '';
     if(groups.length>1){
@@ -876,7 +879,7 @@ async function loadFolderList(isActive){
           <div class="row" style="justify-content:space-between;">
             <b>${leafNameOf(f.name)}</b>
           </div>
-          <div class="muted" style="font-size:13px;">${f._setCount||0} subsection${f._setCount===1?'':'s'} · ~${f._avgPerSet||0} question${f._avgPerSet===1?'':'s'} each · ${f._count||0} total${!f.exam_type?' · not set up yet':''}</div>
+          <div class="muted" style="font-size:13px;">${loading ? 'loading details…' : `${f._setCount||0} subsection${f._setCount===1?'':'s'} · ~${f._avgPerSet||0} question${f._avgPerSet===1?'':'s'} each · ${f._count||0} total${!f.exam_type?' · not set up yet':''}`}</div>
           ${pct!=null ? `<div class="muted" style="font-size:12.5px;color:var(--amber);">Your score: ${pct}%${rank.rank?` · ${rank.percentile}ᵗʰ percentile (updates as more people attempt)`:' · not enough attempts yet to rank'}</div>` : ''}
         </div>`;
       });
@@ -885,7 +888,7 @@ async function loadFolderList(isActive){
     if(!listArea) return;
     listArea.innerHTML = html;
     const sel = document.getElementById('folderGroupSel');
-    if(sel) sel.onchange = (e)=> renderList(e.target.value);
+    if(sel) sel.onchange = (e)=>{ curFilterGroup = e.target.value; renderList(curFilterGroup, loading); };
     document.querySelectorAll('[data-folder]').forEach(el=>{
       el.onclick = async ()=>{
         const fid = el.dataset.folder;
@@ -898,11 +901,46 @@ async function loadFolderList(isActive){
 
   if(myToken !== navToken) return;
   document.getElementById('utabBody').innerHTML += `<div id="folderListArea"></div>`;
-  renderList('__all__');
+  // Show the list of section names right away — this is what the person is
+  // actually here for — instead of leaving the screen blank while question
+  // counts, subsection counts, and everyone's rank stats load underneath.
+  // Those details fill themselves in a moment later without another tap.
+  let curFilterGroup = '__all__';
+  renderList(curFilterGroup, true);
   const crumb0 = document.querySelector('[data-crumb="0"]');
   if(crumb0) crumb0.onclick = ()=>{ goTo({nav:{}}); };
   const crumb1 = document.querySelector('[data-crumb="1"]');
   if(crumb1) crumb1.onclick = ()=>{ goTo({nav:{qbankId:S.nav.qbankId}}); };
+
+  // One round trip for all folder counts in this category, instead of one
+  // count query per folder — this was the main lag when opening a platform.
+  const countMap = await countsByFolder(folders.map(f=>f.id));
+  if(myToken !== navToken) return;
+  folders.forEach(f=>{ f._count = countMap[f.id]||0; });
+  renderList(curFilterGroup, false);
+
+  // How many subsections ("sub-folders") each section splits into, and this
+  // user's live score/percentile per section — both batched (one query +
+  // one set of parallel RPC calls) instead of a query per folder. This is
+  // the slowest part (a rank RPC per section), so it fills in last, after
+  // the list and its question counts are already on screen.
+  const { data: setRows } = await sb.from('sets').select('folder_id').is('user_id', null).eq('set_type','main').in('folder_id', folders.map(f=>f.id));
+  if(myToken !== navToken) return;
+  const setCountMap = {};
+  (setRows||[]).forEach(r=>{ setCountMap[r.folder_id] = (setCountMap[r.folder_id]||0)+1; });
+  folders.forEach(f=>{
+    f._setCount = setCountMap[f.id]||0;
+    f._avgPerSet = f._setCount ? Math.round((f._count||0)/f._setCount) : (f._count||0);
+  });
+  renderList(curFilterGroup, false);
+
+  const rankResults = await Promise.all(folders.map(f=>sb.rpc('folder_rank_stats', { p_folder_id: f.id, p_user_id: S.profile.id })));
+  if(myToken !== navToken) return;
+  folders.forEach((f,i)=>{
+    const r = rankResults[i]?.data; const row = Array.isArray(r)?r[0]:r;
+    f._rank = (row && row.sets_completed) ? row : null;
+  });
+  renderList(curFilterGroup, false);
 }
 async function loadFolderSets(isActive){
   const myToken = navToken;
@@ -2193,6 +2231,7 @@ async function renderFolderList(){
 
   const byCat = {};
   allFolders.forEach(f=>{ const c=categoryOf(f); (byCat[c]=byCat[c]||[]).push(f); });
+  Object.values(byCat).forEach(list=>list.sort((a,b)=>naturalCompare(leafNameOf(a.name), leafNameOf(b.name))));
   const cats = CATEGORY_ORDER.filter(c=>byCat[c]).concat(Object.keys(byCat).filter(c=>!CATEGORY_ORDER.includes(c)));
   if(!S.adminCategory || !byCat[S.adminCategory]) S.adminCategory = cats[0];
 
@@ -2420,6 +2459,7 @@ async function renderRankFolders(){
   const wrap = document.getElementById('rkFolderWrap');
   const { data: folders } = await sb.from('folders').select('*').eq('qbank_id', S.rankQb).order('name');
   if(!folders || !folders.length){ wrap.innerHTML = `<p class="muted">No sections in this qbank yet.</p>`; document.getElementById('rkSetsWrap').innerHTML=''; return; }
+  folders.sort((a,b)=>naturalCompare(leafNameOf(a.name), leafNameOf(b.name)));
   S.rankFolder = S.rankFolder && folders.some(f=>f.id===S.rankFolder) ? S.rankFolder : folders[0].id;
   wrap.innerHTML = `<label>Section</label><select id="rkFolder">${folders.map(f=>`<option value="${f.id}" ${f.id===S.rankFolder?'selected':''}>${f.name}</option>`).join('')}</select>`;
   document.getElementById('rkFolder').onchange = (e)=>{ S.rankFolder = e.target.value; renderRankSets(); };
