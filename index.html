@@ -2190,9 +2190,40 @@ async function adminFolders(){
     const typed = prompt(`This permanently deletes the qbank "${qb.name}" and every section, question, and user attempt inside it. This cannot be undone.\n\nType the qbank name exactly to confirm:`);
     if(typed !== qb.name){ if(typed !== null) alert('Name did not match — nothing was deleted.'); return; }
     const btn = document.getElementById('delQbankBtn');
-    btn.disabled = true; btn.textContent = 'Deleting…';
-    const { error } = await sb.from('qbanks').delete().eq('id', qbId);
-    if(error){ alert('Delete failed: ' + error.message); btn.disabled=false; btn.textContent='Delete this qbank'; return; }
+    btn.disabled = true;
+    try{
+      btn.textContent = 'Deleting… fetching sections';
+      const { data: folders, error: fErr } = await sb.from('folders').select('id').eq('qbank_id', qbId);
+      if(fErr) throw fErr;
+      const folderIds = (folders||[]).map(f=>f.id);
+      // A qbank with 100k+ questions across thousands of sections can't be
+      // deleted in one shot — a single cascading DELETE that size runs into
+      // Postgres's statement timeout and fails outright, leaving everything
+      // in place ("Delete failed: canceling statement due to statement
+      // timeout"). Deleting a batch of sections' worth of rows at a time
+      // (attempts, then sets, then questions, then the folders themselves)
+      // keeps every individual statement small enough to always complete.
+      const CHUNK = 40;
+      for(let i=0; i<folderIds.length; i+=CHUNK){
+        const chunk = folderIds.slice(i, i+CHUNK);
+        btn.textContent = `Deleting… sections ${i+1}-${Math.min(i+CHUNK,folderIds.length)} of ${folderIds.length}`;
+        const { data: setsInChunk } = await sb.from('sets').select('id').in('folder_id', chunk);
+        const setIds = (setsInChunk||[]).map(s=>s.id);
+        for(let j=0; j<setIds.length; j+=200){
+          await sb.from('attempts').delete().in('set_id', setIds.slice(j, j+200));
+        }
+        await sb.from('sets').delete().in('folder_id', chunk);
+        await sb.from('questions').delete().in('folder_id', chunk);
+        await sb.from('folders').delete().in('id', chunk);
+      }
+      btn.textContent = 'Deleting… finishing up';
+      const { error } = await sb.from('qbanks').delete().eq('id', qbId);
+      if(error) throw error;
+    }catch(err){
+      alert('Delete failed: ' + (err?.message || err));
+      btn.disabled = false; btn.textContent = 'Delete this qbank';
+      return;
+    }
     S.adminQbSel = null;
     adminFolders();
   };
