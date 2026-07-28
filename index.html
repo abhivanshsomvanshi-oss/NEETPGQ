@@ -1955,6 +1955,7 @@ async function renderAdmin(){
   wrap.innerHTML = `<div class="tabs">
     <div class="tab ${S.atab==='upload'?'on':''}" data-t="upload">Upload</div>
     <div class="tab ${S.atab==='folders'?'on':''}" data-t="folders">Sections</div>
+    <div class="tab ${S.atab==='manage'?'on':''}" data-t="manage">Manage</div>
     <div class="tab ${S.atab==='users'?'on':''}" data-t="users">Users</div>
     <div class="tab ${S.atab==='plans'?'on':''}" data-t="plans">Plans</div>
     <div class="tab ${S.atab==='rankings'?'on':''}" data-t="rankings">Rankings</div>
@@ -1963,6 +1964,7 @@ async function renderAdmin(){
   wrap.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ if(t.dataset.t===S.atab) return; goTo({atab:t.dataset.t}); });
   if(S.atab==='upload') return adminUpload();
   if(S.atab==='folders') return adminFolders();
+  if(S.atab==='manage') return adminManage();
   if(S.atab==='users') return adminUsers();
   if(S.atab==='plans') return adminPlans();
   if(S.atab==='rankings') return adminRankings();
@@ -2332,11 +2334,21 @@ async function adminFolders(){
       <option value="inicet">INICET pattern (4×50 q, 45 min, sequential)</option>
       <option value="neetpg">NEET PG pattern (5×40 q, 42 min, sequential)</option>
       <option value="updated_neetpg">Updated NEET PG (5×36 q, 42 min, sequential)</option>
+      <option value="custom">Custom — you choose questions/set &amp; minutes</option>
     </select>
+    <div id="customPatternWrap" style="display:none;">
+      <div class="row">
+        <div style="flex:1;"><label>Questions per set (0 = one set, all questions)</label><input type="number" id="customPerSet" min="0" value="50"></div>
+        <div style="flex:1;"><label>Minutes per full set</label><input type="number" id="customMinutes" min="1" value="45"></div>
+      </div>
+    </div>
     <button class="primary" id="genSets" style="margin-top:14px;">Generate sets for selected sections</button>
     <div id="genStatus" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
   </div>`;
   document.getElementById('qbPick').onchange = (e)=>{ S.adminQbSel = e.target.value; S.adminCategory = null; adminFolders(); };
+  document.getElementById('examTypeSel').onchange = (e)=>{
+    document.getElementById('customPatternWrap').style.display = e.target.value==='custom' ? 'block' : 'none';
+  };
   document.getElementById('delQbankBtn').onclick = async ()=>{
     const qbId = document.getElementById('qbPick').value;
     const qb = qbanks.find(q=>q.id===qbId);
@@ -2387,11 +2399,18 @@ async function adminFolders(){
     const type = document.getElementById('examTypeSel').value;
     const st=document.getElementById('genStatus');
     if(!ids.length){ st.textContent='Select at least one section.'; return; }
+    let customPerSet = null, customMinutes = null;
+    if(type==='custom'){
+      const rawPerSet = parseInt(document.getElementById('customPerSet').value, 10);
+      customPerSet = (Number.isFinite(rawPerSet) && rawPerSet>0) ? rawPerSet : null; // null/0 = one set, no split
+      customMinutes = parseFloat(document.getElementById('customMinutes').value) || 45;
+    }
     let log=[];
     for(const folderId of ids){
       const { data: folderRow } = await sb.from('folders').select('*').eq('id', folderId).maybeSingle();
-      await sb.from('folders').update({exam_type:type}).eq('id', folderId);
-      const folder = {...folderRow, exam_type:type};
+      const patch = type==='custom' ? {exam_type:type, custom_per_set:customPerSet, custom_minutes:customMinutes} : {exam_type:type};
+      await sb.from('folders').update(patch).eq('id', folderId);
+      const folder = {...folderRow, ...patch};
       const n = await generateSetsForFolder(folder);
       log.push(`${folder.name}: ${n} sets generated.`);
       st.textContent = log.join('\n');
@@ -2409,7 +2428,7 @@ async function adminFolders(){
 async function renderFolderList(){
   const qbankId = document.getElementById('qbPick').value;
   S.adminQbSel = qbankId;
-  const allFolders = await fetchAllRows(()=>sb.from('folders').select('id, name, exam_type').eq('qbank_id', qbankId));
+  const allFolders = await fetchAllRows(()=>sb.from('folders').select('id, name, exam_type, custom_per_set, custom_minutes').eq('qbank_id', qbankId));
   const el = document.getElementById('folderList');
   if(!allFolders || !allFolders.length){ el.innerHTML = `<p class="muted">No sections in this qbank yet.</p>`; return; }
 
@@ -2459,8 +2478,9 @@ async function renderFolderList(){
     html += `<div id="folderChecklistItems">`;
     for(const f of visible){
       const cfg = EXAM_CONFIG[f.exam_type];
+      const patternLabel = f.exam_type==='custom' ? `Custom (${f.custom_per_set||'all'} q/set, ${f.custom_minutes||45} min)` : (cfg?cfg.label:'not set');
       html += `<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:8px 0;">
-        <input type="checkbox" value="${f.id}" class="folderChk" style="width:auto;"> ${leafNameOf(f.name)} <span class="muted">(${f._count||0} questions — currently: ${cfg?cfg.label:'not set'})</span></label>`;
+        <input type="checkbox" value="${f.id}" class="folderChk" style="width:auto;"> ${leafNameOf(f.name)} <span class="muted">(${f._count||0} questions — currently: ${patternLabel})</span></label>`;
     }
     html += `</div>`;
     wrap.innerHTML = html;
@@ -2494,8 +2514,10 @@ function chunkToSets(ids, perSet, fullMinutes, subject){
 // exam_type is currently set on the folder.
 async function generateSetsForFolder(folder){
   const type = folder.exam_type;
-  if(!type || !EXAM_CONFIG[type]) return 0;
-  const cfg = EXAM_CONFIG[type];
+  const cfg = type==='custom'
+    ? { perSet: folder.custom_per_set ?? null, minutesPerFull: folder.custom_minutes || 45, sequential:false }
+    : EXAM_CONFIG[type];
+  if(!type || !cfg) return 0;
   await sb.from('sets').delete().eq('folder_id', folder.id).is('user_id', null);
   const qs = await fetchAllRows(()=>sb.from('questions').select('id, subject').eq('folder_id', folder.id).order('order_index'));
   let setsToInsert = [];
@@ -2512,6 +2534,205 @@ async function generateSetsForFolder(folder){
     await sb.from('sets').insert(setsToInsert.map(s=>({...s, qbank_id:folder.qbank_id, folder_id:folder.id})));
   }
   return setsToInsert.length;
+}
+
+// ---------- Manage tab: move sections between qbanks, and hand-edit any generated set ----------
+async function adminManage(){
+  const body=document.getElementById('atabBody');
+  const { data: qbanks } = await sb.from('qbanks').select('*').order('name');
+  if(!qbanks || !qbanks.length){ body.innerHTML = `<div class="card muted">No qbanks yet — upload something first.</div>`; return; }
+  S.mgQbSel = S.mgQbSel && qbanks.some(q=>q.id===S.mgQbSel) ? S.mgQbSel : qbanks[0].id;
+  body.innerHTML = `
+  <div class="card">
+    <h3>Create a new (empty) qbank</h3>
+    <p class="muted">Makes just the container — it'll show up everywhere qbanks are picked. Upload into it from the Upload tab, or move existing sections into it below.</p>
+    <div class="row">
+      <input id="mgNewBlankQbName" placeholder="e.g. INICET 2027 Batch" style="flex:1;">
+      <button class="primary" id="mgCreateBlankQb" style="white-space:nowrap;">Create qbank</button>
+    </div>
+    <div id="mgCreateStatus" class="muted" style="margin-top:6px;"></div>
+  </div>
+  <div class="card">
+    <h3>Move sections to another qbank</h3>
+    <p class="muted">Pick sections from one qbank and move them (with all their questions and sets) into a different qbank — existing one or brand new. Use this to split a qbank in two, or to merge one into another.</p>
+    <label>From qbank</label>
+    <select id="mgQbPick">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.mgQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
+    <div id="mgFolderList" class="muted" style="margin-top:12px;">Loading…</div>
+    <label>Move to</label>
+    <select id="mgTargetPick">
+      ${qbanks.map(qb=>`<option value="${qb.id}">${qb.name}</option>`).join('')}
+      <option value="__new__">+ Create a new qbank…</option>
+    </select>
+    <div id="mgNewQbWrap" style="display:none;"><label>New qbank name</label><input id="mgNewQbName" placeholder="e.g. BTR — Split 2"></div>
+    <button class="primary" id="mgMoveBtn" style="margin-top:14px;">Move selected sections</button>
+    <div id="mgMoveStatus" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
+  </div>
+  <div class="card">
+    <h3>Edit a set's questions</h3>
+    <p class="muted">Add, remove, or reorder the exact questions inside any already-generated set.</p>
+    <label>QBank</label>
+    <select id="esQbPick">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.mgQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
+    <div id="esFolderWrap" style="margin-top:10px;"></div>
+    <div id="esSetWrap" style="margin-top:10px;"></div>
+    <div id="esEditorWrap" style="margin-top:14px;"></div>
+  </div>`;
+  document.getElementById('mgQbPick').onchange = (e)=>{ S.mgQbSel = e.target.value; renderMoveFolderList(); };
+  document.getElementById('mgTargetPick').onchange = (e)=>{
+    document.getElementById('mgNewQbWrap').style.display = e.target.value==='__new__' ? 'block' : 'none';
+  };
+  document.getElementById('mgMoveBtn').onclick = ()=> doMoveSections(qbanks);
+  document.getElementById('mgCreateBlankQb').onclick = async ()=>{
+    const nameInput = document.getElementById('mgNewBlankQbName');
+    const st = document.getElementById('mgCreateStatus');
+    const name = nameInput.value.trim();
+    if(!name){ st.textContent = 'Enter a name first.'; return; }
+    const { data, error } = await sb.from('qbanks').insert({name}).select().maybeSingle();
+    st.textContent = error ? ('Failed: '+error.message) : `Created "${data.name}" ✓`;
+    if(!error){ nameInput.value=''; adminManage(); }
+  };
+  await renderMoveFolderList();
+
+  document.getElementById('esQbPick').onchange = (e)=>{ S.esQbSel = e.target.value; S.esFolder=null; S.esSet=null; renderEsFolders(); };
+  S.esQbSel = S.esQbSel && qbanks.some(q=>q.id===S.esQbSel) ? S.esQbSel : S.mgQbSel;
+  await renderEsFolders();
+}
+async function renderMoveFolderList(){
+  const el = document.getElementById('mgFolderList');
+  const qbId = document.getElementById('mgQbPick').value;
+  const folders = await fetchAllRows(()=>sb.from('folders').select('id, name').eq('qbank_id', qbId));
+  if(!folders.length){ el.innerHTML = `<p class="muted">No sections in this qbank.</p>`; return; }
+  folders.sort((a,b)=>naturalCompare(a.name,b.name));
+  const countMap = await countsByFolder(folders.map(f=>f.id));
+  el.innerHTML = `<label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:13px;margin:0 0 8px;">
+      <input type="checkbox" id="mgChkAll" style="width:auto;"> Select all</label>
+    <div style="max-height:260px;overflow-y:auto;">${folders.map(f=>`<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:6px 0;">
+      <input type="checkbox" value="${f.id}" class="mgChk" style="width:auto;"> ${f.name} <span class="muted">(${countMap[f.id]||0} q)</span></label>`).join('')}</div>`;
+  document.getElementById('mgChkAll').onchange = (e)=> document.querySelectorAll('.mgChk').forEach(c=>c.checked=e.target.checked);
+}
+async function doMoveSections(qbanks){
+  const ids = [...document.querySelectorAll('.mgChk:checked')].map(c=>c.value);
+  const st = document.getElementById('mgMoveStatus');
+  if(!ids.length){ st.textContent = 'Select at least one section.'; return; }
+  let targetId = document.getElementById('mgTargetPick').value;
+  const btn = document.getElementById('mgMoveBtn');
+  btn.disabled = true;
+  try{
+    if(targetId==='__new__'){
+      const name = document.getElementById('mgNewQbName').value.trim();
+      if(!name){ st.textContent = 'Enter a name for the new qbank.'; btn.disabled=false; return; }
+      const { data: newQb, error } = await sb.from('qbanks').insert({name}).select().maybeSingle();
+      if(error) throw error;
+      targetId = newQb.id;
+    }
+    if(targetId === document.getElementById('mgQbPick').value){ st.textContent = "Source and target are the same qbank."; btn.disabled=false; return; }
+    // Same chunk size/approach as qbank deletion: keeps every UPDATE statement
+    // small enough to avoid a statement timeout on sections with 100k+ rows.
+    const CHUNK = 40;
+    for(let i=0;i<ids.length;i+=CHUNK){
+      const chunk = ids.slice(i,i+CHUNK);
+      st.textContent = `Moving… sections ${i+1}-${Math.min(i+CHUNK,ids.length)} of ${ids.length}`;
+      await sb.from('questions').update({qbank_id:targetId}).in('folder_id', chunk);
+      await sb.from('sets').update({qbank_id:targetId}).in('folder_id', chunk);
+      await sb.from('folders').update({qbank_id:targetId}).in('id', chunk);
+    }
+    st.textContent = `Done — ${ids.length} section(s) moved.`;
+  }catch(err){
+    st.textContent = 'Move failed: ' + (err?.message||err);
+  }
+  btn.disabled = false;
+  renderMoveFolderList();
+}
+async function renderEsFolders(){
+  const wrap = document.getElementById('esFolderWrap');
+  const folders = await fetchAllRows(()=>sb.from('folders').select('id, name').eq('qbank_id', S.esQbSel));
+  if(!folders.length){ wrap.innerHTML = `<p class="muted">No sections in this qbank.</p>`; document.getElementById('esSetWrap').innerHTML=''; return; }
+  folders.sort((a,b)=>naturalCompare(a.name,b.name));
+  S.esFolder = S.esFolder && folders.some(f=>f.id===S.esFolder) ? S.esFolder : folders[0].id;
+  wrap.innerHTML = `<label>Section</label><select id="esFolderPick">${folders.map(f=>`<option value="${f.id}" ${f.id===S.esFolder?'selected':''}>${f.name}</option>`).join('')}</select>`;
+  document.getElementById('esFolderPick').onchange = (e)=>{ S.esFolder = e.target.value; S.esSet=null; renderEsSets(); };
+  await renderEsSets();
+}
+async function renderEsSets(){
+  const wrap = document.getElementById('esSetWrap');
+  const { data: sets } = await sb.from('sets').select('*').eq('folder_id', S.esFolder).is('user_id', null).order('subject').order('set_number');
+  document.getElementById('esEditorWrap').innerHTML = '';
+  if(!sets || !sets.length){ wrap.innerHTML = `<p class="muted">No sets generated for this section yet — use the Sections tab first.</p>`; return; }
+  S.esSet = S.esSet && sets.some(s=>s.id===S.esSet) ? S.esSet : sets[0].id;
+  wrap.innerHTML = `<label>Set</label><select id="esSetPick">${sets.map(s=>`<option value="${s.id}" ${s.id===S.esSet?'selected':''}>${s.subject?s.subject+' — ':''}Set ${s.set_number} (${(s.question_ids||[]).length} q)</option>`).join('')}</select>`;
+  document.getElementById('esSetPick').onchange = (e)=>{ S.esSet = e.target.value; renderSetEditor(); };
+  await renderSetEditor();
+}
+async function renderSetEditor(){
+  const wrap = document.getElementById('esEditorWrap');
+  wrap.innerHTML = `<p class="muted">Loading…</p>`;
+  const { data: set } = await sb.from('sets').select('*').eq('id', S.esSet).maybeSingle();
+  if(!set){ wrap.innerHTML=''; return; }
+  const qIds = set.question_ids||[];
+  const { data: qs } = qIds.length ? await sb.from('questions').select('id, q_text, subject').in('id', qIds) : { data: [] };
+  const qMap = {}; (qs||[]).forEach(q=> qMap[q.id]=q);
+  const orderedQs = qIds.map(id=>qMap[id]).filter(Boolean);
+  wrap.innerHTML = `
+    <div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:8px;">
+      ${orderedQs.map((q,i)=>`<div class="row" style="justify-content:space-between;padding:8px;border-bottom:1px solid var(--border-soft);">
+        <span style="font-size:14px;">${i+1}. ${escapeHtml((q.q_text||'').replace(/<[^>]+>/g,'').slice(0,90))}${(q.q_text||'').length>90?'…':''}</span>
+        <button class="iconbtn ghost esRemove" data-id="${q.id}" title="Remove">✕</button>
+      </div>`).join('') || '<p class="muted" style="padding:8px;">No questions in this set.</p>'}
+    </div>
+    <div style="margin-top:12px;">
+      <label>Add a question (search this section's question bank)</label>
+      <input id="esSearch" placeholder="Type part of the question text…">
+      <div id="esSearchResults" class="muted" style="margin-top:6px;max-height:200px;overflow-y:auto;"></div>
+    </div>
+    <div class="row" style="margin-top:14px;justify-content:space-between;">
+      <span class="muted" id="esCount">${orderedQs.length} question(s)</span>
+      <div class="row">
+        <button class="danger" id="esDeleteSet">Delete this set</button>
+        <button class="primary" id="esSave">Save changes</button>
+      </div>
+    </div>
+    <div id="esSaveStatus" class="muted" style="margin-top:6px;"></div>`;
+  let workingIds = [...qIds];
+  wrap.querySelectorAll('.esRemove').forEach(b=> b.onclick = ()=>{
+    workingIds = workingIds.filter(id=>id!==b.dataset.id);
+    b.closest('div.row').remove();
+    document.getElementById('esCount').textContent = `${workingIds.length} question(s)`;
+  });
+  let searchTimer=null;
+  document.getElementById('esSearch').oninput = (e)=>{
+    clearTimeout(searchTimer);
+    const term = e.target.value.trim();
+    searchTimer = setTimeout(async ()=>{
+      const resWrap = document.getElementById('esSearchResults');
+      if(term.length<3){ resWrap.innerHTML = '<p class="muted">Type at least 3 characters…</p>'; return; }
+      resWrap.innerHTML = 'Searching…';
+      const { data: found } = await sb.from('questions').select('id, q_text').eq('folder_id', S.esFolder).ilike('q_text', `%${term}%`).limit(15);
+      const filtered = (found||[]).filter(q=>!workingIds.includes(q.id));
+      if(!filtered.length){ resWrap.innerHTML = '<p class="muted">No matches (or already in this set).</p>'; return; }
+      resWrap.innerHTML = filtered.map(q=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-soft);">
+        <span style="font-size:13.5px;">${escapeHtml((q.q_text||'').replace(/<[^>]+>/g,'').slice(0,80))}…</span>
+        <button class="subtle esAdd" data-id="${q.id}" style="min-height:auto;padding:6px 12px;">+ Add</button>
+      </div>`).join('');
+      resWrap.querySelectorAll('.esAdd').forEach(b=> b.onclick = ()=>{
+        workingIds.push(b.dataset.id);
+        document.getElementById('esCount').textContent = `${workingIds.length} question(s)`;
+        b.textContent = 'Added ✓'; b.disabled = true;
+      });
+    }, 350);
+  };
+  document.getElementById('esSave').onclick = async ()=>{
+    const st = document.getElementById('esSaveStatus');
+    st.textContent = 'Saving…';
+    const duration = Math.round(workingIds.length*0.9*10)/10;
+    const { error } = await sb.from('sets').update({question_ids:workingIds, duration_minutes:duration}).eq('id', S.esSet);
+    st.textContent = error ? ('Failed: '+error.message) : `Saved — ${workingIds.length} question(s), ~${duration} min.`;
+    if(!error) renderEsSets();
+  };
+  document.getElementById('esDeleteSet').onclick = async ()=>{
+    if(!confirm('Delete this set? Users\' past attempts on it stay on record but the set itself disappears.')) return;
+    await sb.from('sets').delete().eq('id', S.esSet);
+    S.esSet = null;
+    renderEsSets();
+  };
 }
 
 async function adminUsers(){
