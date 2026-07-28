@@ -43,6 +43,18 @@ html.light{
   --glow-amber:0 0 0 1px rgba(185,121,31,.25), 0 0 18px -5px rgba(185,121,31,.35);
   --bg-image:radial-gradient(circle at 10% -4%, #FBF3DC 0%, transparent 42%),radial-gradient(circle at 100% 4%, #E8F4F2 0%, transparent 40%),var(--bg);
 }
+html.sky{
+  --bg:#EAF5FD; --surface:#FFFFFF; --surface-2:#E3F1FB; --surface-3:#D2E8F8; --border:#BEDFF4;
+  --border-soft:rgba(20,70,110,.07);
+  --text:#123049; --text-dim:#5C7E96; --text-inv:#FFFFFF;
+  --amber:#2E9BE6; --amber-2:#6FC4F5; --amber-dim:#D7EEFC;
+  --cyan:#0FA6C9; --cyan-dim:#DBF4FA;
+  --gray:#A9C9DE; --red:#E15660; --green:#1FAE7A; --purple:#8B7CF2;
+  --shadow:0 10px 30px -9px rgba(20,90,140,.16), 0 2px 9px rgba(20,90,140,.09);
+  --shadow-sm:0 3px 11px rgba(20,90,140,.09);
+  --glow-amber:0 0 0 1px rgba(46,155,230,.25), 0 0 20px -5px rgba(46,155,230,.4);
+  --bg-image:radial-gradient(circle at 12% -4%, #D8ECFB 0%, transparent 42%),radial-gradient(circle at 100% 6%, #CFEFF5 0%, transparent 40%),radial-gradient(circle at 50% 118%, #DCE8FB 0%, transparent 46%),var(--bg);
+}
 *{box-sizing:border-box;}
 @media(prefers-reduced-motion: reduce){ *{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important;} }
 html,body{margin:0;padding:0;background:var(--bg-image);background-attachment:fixed;color:var(--text);font-family:var(--body);height:100%;font-size:16.5px;-webkit-font-smoothing:antialiased;}
@@ -50,6 +62,7 @@ body{position:relative;}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
   background-image:repeating-linear-gradient(180deg, rgba(255,255,255,.012) 0px, rgba(255,255,255,.012) 1px, transparent 1px, transparent 3px);}
 html.light body::before{opacity:.35; background-image:repeating-linear-gradient(180deg, rgba(20,15,5,.01) 0px, rgba(20,15,5,.01) 1px, transparent 1px, transparent 3px);}
+html.sky body::before{opacity:.3; background-image:repeating-linear-gradient(180deg, rgba(10,50,90,.012) 0px, rgba(10,50,90,.012) 1px, transparent 1px, transparent 3px);}
 #app{min-height:100vh;display:flex;flex-direction:column;position:relative;z-index:1;}
 ::selection{background:var(--amber);color:#241a06;}
 ::-webkit-scrollbar{width:10px;height:10px;}
@@ -375,10 +388,15 @@ let S = { session:null, profile:null, deviceId:null, view:'loading', nav:{}, ins
 function applyTheme(){
   const t = localStorage.getItem('qb_theme') || 'dark';
   document.documentElement.classList.toggle('light', t==='light');
+  document.documentElement.classList.toggle('sky', t==='sky');
 }
+function themeIcon(t){ return t==='dark' ? '☀️' : t==='light' ? '🌤️' : '🌙'; }
+function currentTheme(){ return localStorage.getItem('qb_theme') || 'dark'; }
 function toggleTheme(){
-  const cur = localStorage.getItem('qb_theme') || 'dark';
-  localStorage.setItem('qb_theme', cur==='dark' ? 'light' : 'dark');
+  const order = ['dark','light','sky'];
+  const cur = currentTheme();
+  const next = order[(order.indexOf(cur)+1) % order.length];
+  localStorage.setItem('qb_theme', next);
   applyTheme();
   render();
 }
@@ -647,7 +665,7 @@ function topbar(title, right=''){
       ${p.batch?`<div class="muted" style="font-size:13px;">Batch ${escapeHtml(p.batch)}</div>`:''}
     </div>
   </div>` : '';
-  return `<div class="topbar"><div class="brand"><span class="dot"></span>${title}</div><div class="row">${who}${right}<button class="themebtn" id="themeBtn" title="Toggle dark/light">${isLight?'🌙':'☀️'}</button><button class="ghost" id="signoutBtn" style="padding:8px 12px;font-size:13px;">Sign out</button></div></div>`;
+  return `<div class="topbar"><div class="brand"><span class="dot"></span>${title}</div><div class="row">${who}${right}<button class="themebtn" id="themeBtn" title="Switch theme">${themeIcon(currentTheme())}</button><button class="ghost" id="signoutBtn" style="padding:8px 12px;font-size:13px;">Sign out</button></div></div>`;
 }
 function bindTopbar(){
   const b=document.getElementById('signoutBtn'); if(b) b.onclick=signOut;
@@ -660,7 +678,7 @@ function renderAuth(){
   S.authMode = S.authMode || 'login';
   app.innerHTML = `
   <div class="container" style="max-width:420px;padding-top:14vh;">
-    <div class="row" style="justify-content:flex-end;"><button class="themebtn" id="themeBtn">${document.documentElement.classList.contains('light')?'🌙':'☀️'}</button></div>
+    <div class="row" style="justify-content:flex-end;"><button class="themebtn" id="themeBtn">${themeIcon(currentTheme())}</button></div>
     <div style="text-align:center;margin-bottom:22px;">
       <div class="brand" style="justify-content:center;font-size:28px;"><span class="dot"></span><span style="background:linear-gradient(135deg,var(--amber),var(--amber-2));-webkit-background-clip:text;background-clip:text;color:transparent;">QBank Console</span></div>
       <p class="muted" style="margin-top:6px;">CBT-style practice for NEET PG / INICET</p>
@@ -2553,6 +2571,17 @@ async function adminManage(){
     <div id="mgCreateStatus" class="muted" style="margin-top:6px;"></div>
   </div>
   <div class="card">
+    <h3>Create a new section inside a qbank</h3>
+    <p class="muted">A blank section (folder) inside an existing qbank — e.g. a new "GT 4" inside BTR. Move existing sets into it below, or upload fresh questions targeting it.</p>
+    <label>Inside qbank</label>
+    <select id="csQbPick">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.mgQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
+    <div class="row" style="margin-top:8px;">
+      <input id="csFolderName" placeholder="e.g. Grand Tests - GT 4" style="flex:1;">
+      <button class="primary" id="csCreateBtn" style="white-space:nowrap;">Create section</button>
+    </div>
+    <div id="csStatus" class="muted" style="margin-top:6px;"></div>
+  </div>
+  <div class="card">
     <h3>Move sections to another qbank</h3>
     <p class="muted">Pick sections from one qbank and move them (with all their questions and sets) into a different qbank — existing one or brand new. Use this to split a qbank in two, or to merge one into another.</p>
     <label>From qbank</label>
@@ -2566,6 +2595,19 @@ async function adminManage(){
     <div id="mgNewQbWrap" style="display:none;"><label>New qbank name</label><input id="mgNewQbName" placeholder="e.g. BTR — Split 2"></div>
     <button class="primary" id="mgMoveBtn" style="margin-top:14px;">Move selected sections</button>
     <div id="mgMoveStatus" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
+  </div>
+  <div class="card">
+    <h3>Move specific sets between sections</h3>
+    <p class="muted">Same qbank or different — pick the exact sets (not the whole section) and send them to another section. The underlying questions stay put; only the set moves.</p>
+    <label>QBank</label>
+    <select id="msQbPick">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.mgQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
+    <label>From section</label>
+    <select id="msSourceFolderPick"></select>
+    <div id="msSetList" class="muted" style="margin-top:10px;">Loading…</div>
+    <label>To section</label>
+    <select id="msTargetFolderPick"></select>
+    <button class="primary" id="msMoveBtn" style="margin-top:14px;">Move selected sets</button>
+    <div id="msMoveStatus" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
   </div>
   <div class="card">
     <h3>Edit a set's questions</h3>
@@ -2590,11 +2632,64 @@ async function adminManage(){
     st.textContent = error ? ('Failed: '+error.message) : `Created "${data.name}" ✓`;
     if(!error){ nameInput.value=''; adminManage(); }
   };
+  document.getElementById('csCreateBtn').onclick = async ()=>{
+    const st = document.getElementById('csStatus');
+    const name = document.getElementById('csFolderName').value.trim();
+    const qbId = document.getElementById('csQbPick').value;
+    if(!name){ st.textContent = 'Enter a section name.'; return; }
+    const { data, error } = await sb.from('folders').insert({qbank_id:qbId, name}).select().maybeSingle();
+    st.textContent = error ? ('Failed: '+error.message) : `Created "${data.name}" ✓ — now find it under "Move specific sets" or the Sections tab.`;
+    if(!error) document.getElementById('csFolderName').value = '';
+  };
   await renderMoveFolderList();
+
+  document.getElementById('msQbPick').onchange = ()=>{ S.msQbSel = document.getElementById('msQbPick').value; S.msSourceFolder=null; renderMsFolders(); };
+  S.msQbSel = S.msQbSel && qbanks.some(q=>q.id===S.msQbSel) ? S.msQbSel : S.mgQbSel;
+  await renderMsFolders();
 
   document.getElementById('esQbPick').onchange = (e)=>{ S.esQbSel = e.target.value; S.esFolder=null; S.esSet=null; renderEsFolders(); };
   S.esQbSel = S.esQbSel && qbanks.some(q=>q.id===S.esQbSel) ? S.esQbSel : S.mgQbSel;
   await renderEsFolders();
+}
+async function renderMsFolders(){
+  document.getElementById('msQbPick').value = S.msQbSel;
+  const folders = await fetchAllRows(()=>sb.from('folders').select('id, name').eq('qbank_id', S.msQbSel));
+  folders.sort((a,b)=>naturalCompare(a.name,b.name));
+  const srcSel = document.getElementById('msSourceFolderPick');
+  const tgtSel = document.getElementById('msTargetFolderPick');
+  if(!folders.length){
+    srcSel.innerHTML = tgtSel.innerHTML = '';
+    document.getElementById('msSetList').innerHTML = '<p class="muted">No sections in this qbank.</p>';
+    return;
+  }
+  S.msSourceFolder = S.msSourceFolder && folders.some(f=>f.id===S.msSourceFolder) ? S.msSourceFolder : folders[0].id;
+  srcSel.innerHTML = folders.map(f=>`<option value="${f.id}" ${f.id===S.msSourceFolder?'selected':''}>${f.name}</option>`).join('');
+  tgtSel.innerHTML = folders.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
+  srcSel.onchange = (e)=>{ S.msSourceFolder = e.target.value; renderMsSetList(); };
+  await renderMsSetList();
+  document.getElementById('msMoveBtn').onclick = doMoveSets;
+}
+async function renderMsSetList(){
+  const wrap = document.getElementById('msSetList');
+  document.getElementById('msSourceFolderPick').value = S.msSourceFolder;
+  const { data: sets } = await sb.from('sets').select('*').eq('folder_id', S.msSourceFolder).is('user_id', null).order('subject').order('set_number');
+  if(!sets || !sets.length){ wrap.innerHTML = '<p class="muted">No sets in this section yet.</p>'; return; }
+  wrap.innerHTML = `<label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:13px;margin:0 0 8px;">
+      <input type="checkbox" id="msChkAll" style="width:auto;"> Select all</label>
+    ${sets.map(s=>`<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);margin:6px 0;">
+      <input type="checkbox" value="${s.id}" class="msChk" style="width:auto;"> ${s.subject?s.subject+' — ':''}Set ${s.set_number} <span class="muted">(${(s.question_ids||[]).length} q)</span></label>`).join('')}`;
+  document.getElementById('msChkAll').onchange = (e)=> document.querySelectorAll('.msChk').forEach(c=>c.checked=e.target.checked);
+}
+async function doMoveSets(){
+  const ids = [...document.querySelectorAll('.msChk:checked')].map(c=>c.value);
+  const st = document.getElementById('msMoveStatus');
+  const target = document.getElementById('msTargetFolderPick').value;
+  if(!ids.length){ st.textContent = 'Select at least one set.'; return; }
+  if(target === S.msSourceFolder){ st.textContent = 'Source and target sections are the same.'; return; }
+  st.textContent = 'Moving…';
+  const { error } = await sb.from('sets').update({folder_id:target}).in('id', ids);
+  st.textContent = error ? ('Failed: '+error.message) : `Done — ${ids.length} set(s) moved. Underlying questions weren't touched.`;
+  if(!error) renderMsSetList();
 }
 async function renderMoveFolderList(){
   const el = document.getElementById('mgFolderList');
