@@ -2040,23 +2040,41 @@ async function loadSubTab(){
   (plans||[]).forEach(p=>{
     html += `<div class="card"><h3>${p.name}</h3><div class="stat-big">₹${p.price}</div><div class="muted">${p.duration_days} days</div>
       <a href="${upiPayLink(p)}"><button class="primary" style="width:100%;margin-top:12px;">Pay ₹${p.price} via UPI</button></a>
-      <button class="subtle" data-paid="${p.id}" data-amt="${p.price}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" style="width:100%;margin-top:8px;">I've paid — notify admin</button></div>`;
+      <button class="subtle" data-showform="${p.id}" style="width:100%;margin-top:8px;">I've paid — notify admin</button>
+      <div id="payForm-${p.id}" style="display:none;margin-top:10px;">
+        <label>UPI transaction ID / UTR number (from your payment app)</label>
+        <input id="utr-${p.id}" placeholder="e.g. 4123xxxxxxxx">
+        <p class="muted" style="font-size:11.5px;margin:4px 0 0;">This is the reference number your UPI app shows after a successful payment — the admin matches it against the bank statement to confirm the payment is yours.</p>
+        <button class="primary" data-submit="${p.id}" data-amt="${p.price}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" style="width:100%;margin-top:8px;">Submit for verification</button>
+      </div></div>`;
   });
-  html += `</div><div class="card"><p class="muted">UPI ID: <b>${UPI_ID}</b>. After paying, tap "I've paid" on your plan above so the admin can verify and activate your account. If the UPI link doesn't open your payment app, you can also pay manually to the UPI ID above and then tap the button.</p></div>`;
+  html += `</div><div class="card"><p class="muted">UPI ID: <b>${UPI_ID}</b>. After paying, tap "I've paid" on your plan above, enter the UPI transaction ID/UTR from your payment app, and submit — the admin will match it and activate your account.</p></div>`;
   body.innerHTML += html;
-  body.querySelectorAll('[data-paid]').forEach(btn=>{
+  body.querySelectorAll('[data-showform]').forEach(btn=>{
+    btn.onclick = ()=>{
+      document.getElementById(`payForm-${btn.dataset.showform}`).style.display = 'block';
+      btn.style.display = 'none';
+    };
+  });
+  body.querySelectorAll('[data-submit]').forEach(btn=>{
     btn.onclick = async ()=>{
-      btn.disabled = true; btn.textContent = 'Notifying…';
+      const planId = btn.dataset.submit;
+      const utrInput = document.getElementById(`utr-${planId}`);
+      const utr = utrInput.value.trim();
+      if(!utr){ toast('Enter the UPI transaction ID / UTR first'); return; }
+      btn.disabled = true; btn.textContent = 'Submitting…';
       const { error } = await sb.from('payments').insert({
         user_id: S.profile.id,
-        plan_id: btn.dataset.paid,
+        plan_id: planId,
         plan_name: btn.dataset.name,
         amount: +btn.dataset.amt,
+        utr_ref: utr,
         status: 'pending'
       });
-      if(error){ toast('Could not record payment — '+error.message); btn.disabled=false; btn.textContent="I've paid — notify admin"; return; }
-      toast('Recorded — admin will verify and activate your account shortly.');
-      btn.textContent = 'Admin notified ✓';
+      if(error){ toast('Could not record payment — '+error.message); btn.disabled=false; btn.textContent='Submit for verification'; return; }
+      toast('Submitted — admin will verify and activate your account shortly.');
+      utrInput.disabled = true;
+      btn.disabled = true; btn.textContent = 'Submitted ✓';
     };
   });
 }
@@ -3506,7 +3524,7 @@ async function adminPayments(){
   const totalVerified = payments.filter(p=>p.status==='verified').reduce((s,p)=>s+(+p.amount||0),0);
   body.innerHTML = `<div class="card"><h3>💳 Payments</h3>
   <p class="muted">UPI ID: <b>${UPI_ID}</b> · Total verified: <b>₹${totalVerified}</b></p>
-  <div style="overflow-x:auto;"><table id="paymentsTbl"><tr><th>Date</th><th>Student</th><th>Plan</th><th>Amount</th><th>Status</th><th></th></tr>
+  <div style="overflow-x:auto;"><table id="paymentsTbl"><tr><th>Date</th><th>Student</th><th>Plan</th><th>Amount</th><th>UTR / Txn ID</th><th>Status</th><th></th></tr>
   ${payments.map(p=>{
     const u = byId[p.user_id];
     return `<tr data-p="${p.id}" data-uid="${p.user_id}" data-plan="${p.plan_id||''}">
@@ -3514,6 +3532,7 @@ async function adminPayments(){
       <td>${u?escapeHtml(u.name||u.email):'—'}</td>
       <td>${escapeHtml(p.plan_name||'')}</td>
       <td>₹${p.amount}</td>
+      <td style="font-family:var(--mono);">${escapeHtml(p.utr_ref||'—')}</td>
       <td><span class="badge ${p.status}">${p.status}</span></td>
       <td class="row" style="gap:6px;">
         ${p.status!=='verified'?`<button class="primary verifyBtn" style="padding:6px 10px;font-size:12px;">Verify & Activate</button>`:''}
