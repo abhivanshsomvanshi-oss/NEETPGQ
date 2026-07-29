@@ -3023,6 +3023,62 @@ async function renderCsParentOptions(){
   const groups = [...new Set((folders||[]).map(f=>folderGroupOf(f.name)))].sort((a,b)=>a.localeCompare(b));
   groups.forEach(g=> sel.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`));
 }
+async function renderDelSecFolders(){
+  const qbSel = document.getElementById('delSecQbPick');
+  const sel = document.getElementById('delSecPick');
+  if(!sel) return;
+  const qbId = qbSel.value;
+  const folders = await fetchAllRows(()=>sb.from('folders').select('id, name').eq('qbank_id', qbId));
+  folders.sort((a,b)=>naturalCompare(a.name,b.name));
+  window._delSecFolders = folders;
+  if(!folders.length){
+    sel.innerHTML = '';
+    document.getElementById('delSecCounts').textContent = 'No sections in this qbank.';
+    return;
+  }
+  sel.innerHTML = folders.map(f=>`<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+  sel.onchange = renderDelSecCounts;
+  await renderDelSecCounts();
+  document.getElementById('delSecBtn').onclick = doDeleteSection;
+}
+async function renderDelSecCounts(){
+  const el = document.getElementById('delSecCounts');
+  const secId = document.getElementById('delSecPick').value;
+  if(!secId){ el.textContent = ''; return; }
+  el.textContent = 'Checking what\'s inside…';
+  const [{ count: qCount }, { count: sCount }] = await Promise.all([
+    sb.from('questions').select('id', {count:'exact', head:true}).eq('folder_id', secId),
+    sb.from('sets').select('id', {count:'exact', head:true}).eq('folder_id', secId),
+  ]);
+  el.textContent = `Contains ${qCount ?? 0} question(s) and ${sCount ?? 0} set(s).`;
+}
+async function doDeleteSection(){
+  const secId = document.getElementById('delSecPick').value;
+  const folder = (window._delSecFolders||[]).find(f=>f.id===secId);
+  if(!folder) return;
+  const typed = prompt(`This permanently deletes the section "${folder.name}" and every question, set, and user attempt inside it. This cannot be undone.\n\nType the section name exactly to confirm:`);
+  if(typed !== folder.name){ if(typed !== null) alert('Name did not match — nothing was deleted.'); return; }
+  const btn = document.getElementById('delSecBtn');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  try{
+    const { data: setsInFolder } = await sb.from('sets').select('id').eq('folder_id', secId);
+    const setIds = (setsInFolder||[]).map(s=>s.id);
+    for(let j=0; j<setIds.length; j+=200){
+      await sb.from('attempts').delete().in('set_id', setIds.slice(j, j+200));
+    }
+    await sb.from('sets').delete().eq('folder_id', secId);
+    await sb.from('questions').delete().eq('folder_id', secId);
+    const { error } = await sb.from('folders').delete().eq('id', secId);
+    if(error) throw error;
+  }catch(err){
+    alert('Delete failed: ' + (err?.message || err));
+    btn.disabled = false; btn.textContent = 'Delete this section';
+    return;
+  }
+  document.getElementById('delSecStatus').textContent = `"${folder.name}" deleted.`;
+  btn.disabled = false; btn.textContent = 'Delete this section';
+  await renderDelSecFolders();
+}
 async function adminManage(){
   const body=document.getElementById('atabBody');
   const { data: qbanks } = await sb.from('qbanks').select('*').order('name');
@@ -3050,6 +3106,17 @@ async function adminManage(){
       <button class="primary" id="csCreateBtn" style="white-space:nowrap;">Create section</button>
     </div>
     <div id="csStatus" class="muted" style="margin-top:6px;"></div>
+  </div>
+  <div class="card">
+    <h3>Delete a section</h3>
+    <p class="muted" style="color:var(--red);">⚠️ Permanently deletes the section along with every question, generated set, and user attempt inside it. This cannot be undone.</p>
+    <label>QBank</label>
+    <select id="delSecQbPick">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.mgQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
+    <label>Section</label>
+    <select id="delSecPick"></select>
+    <div id="delSecCounts" class="muted" style="margin-top:6px;"></div>
+    <button class="danger" id="delSecBtn" style="margin-top:12px;">Delete this section</button>
+    <div id="delSecStatus" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
   </div>
   <div class="card">
     <h3>Move sections to another qbank</h3>
@@ -3115,6 +3182,10 @@ async function adminManage(){
   };
   document.getElementById('csQbPick').onchange = renderCsParentOptions;
   await renderCsParentOptions();
+
+  document.getElementById('delSecQbPick').value = S.mgQbSel;
+  document.getElementById('delSecQbPick').onchange = renderDelSecFolders;
+  await renderDelSecFolders();
   await renderMoveFolderList();
 
   document.getElementById('msQbPick').onchange = ()=>{ S.msQbSel = document.getElementById('msQbPick').value; S.msSourceFolder=null; renderMsFolders(); };
