@@ -27,10 +27,10 @@
   --glow-amber:0 0 0 1px rgba(239,165,62,.28), 0 0 22px -4px rgba(239,165,62,.45);
   --ease:cubic-bezier(.2,.8,.2,1);
   --bg-image:
-    radial-gradient(circle at 14% -4%, rgba(239,165,62,.10) 0%, transparent 40%),
-    radial-gradient(circle at 100% 6%, rgba(87,207,224,.08) 0%, transparent 38%),
-    radial-gradient(circle at 50% 120%, rgba(155,124,246,.06) 0%, transparent 45%),
-    var(--bg);
+    radial-gradient(circle at 14% -4%, rgba(239,165,62,.12) 0%, transparent 40%),
+    radial-gradient(circle at 100% 6%, rgba(87,207,224,.10) 0%, transparent 38%),
+    radial-gradient(circle at 50% 120%, rgba(155,124,246,.07) 0%, transparent 45%),
+    linear-gradient(to top right, #000000 0%, #05070E 20%, #0A0F1C 38%, #101A2E 56%, #182645 76%, #223A5F 100%);
 }
 html.light{
   --bg:#F5F2E9; --surface:#FFFFFF; --surface-2:#F1EEE2; --surface-3:#E8E3D2; --border:#E1DBC8;
@@ -41,7 +41,7 @@ html.light{
   --gray:#B7AF9D; --shadow:0 10px 28px -8px rgba(80,60,20,.14), 0 2px 8px rgba(80,60,20,.08);
   --shadow-sm:0 3px 10px rgba(80,60,20,.08);
   --glow-amber:0 0 0 1px rgba(185,121,31,.25), 0 0 18px -5px rgba(185,121,31,.35);
-  --bg-image:radial-gradient(circle at 10% -4%, #FBF3DC 0%, transparent 42%),radial-gradient(circle at 100% 4%, #E8F4F2 0%, transparent 40%),var(--bg);
+  --bg-image:radial-gradient(circle at 10% -4%, rgba(251,243,220,.7) 0%, transparent 42%),radial-gradient(circle at 100% 4%, rgba(232,244,242,.6) 0%, transparent 40%),linear-gradient(to top right, #EAD497 0%, #F0E2BC 22%, #F5ECD6 42%, #FAF6EA 62%, #FDFBF5 82%, #FFFFFF 100%);
 }
 html.sky{
   --bg:#EAF5FD; --surface:#FFFFFF; --surface-2:#E3F1FB; --surface-3:#D2E8F8; --border:#BEDFF4;
@@ -53,7 +53,7 @@ html.sky{
   --shadow:0 10px 30px -9px rgba(20,90,140,.16), 0 2px 9px rgba(20,90,140,.09);
   --shadow-sm:0 3px 11px rgba(20,90,140,.09);
   --glow-amber:0 0 0 1px rgba(46,155,230,.25), 0 0 20px -5px rgba(46,155,230,.4);
-  --bg-image:radial-gradient(circle at 12% -4%, #D8ECFB 0%, transparent 42%),radial-gradient(circle at 100% 6%, #CFEFF5 0%, transparent 40%),radial-gradient(circle at 50% 118%, #DCE8FB 0%, transparent 46%),var(--bg);
+  --bg-image:radial-gradient(circle at 12% -4%, rgba(216,236,251,.7) 0%, transparent 42%),radial-gradient(circle at 100% 6%, rgba(207,239,245,.6) 0%, transparent 40%),linear-gradient(to top right, #AED7F2 0%, #C4E3F7 22%, #DAEFFB 42%, #EBF6FD 62%, #F6FBFE 82%, #FFFFFF 100%);
 }
 *{box-sizing:border-box;}
 @media(prefers-reduced-motion: reduce){ *{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important;} }
@@ -73,20 +73,21 @@ a{color:var(--amber);}
 h1,h2,h3{font-family:var(--display);margin:0 0 8px;letter-spacing:.01em;}
 h2{font-size:22px;} h3{font-size:18px;}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:6px;}
-button{font-family:var(--body);cursor:pointer;border:none;border-radius:12px;padding:13px 20px;font-weight:600;font-size:15.5px;transition:transform .16s var(--ease), opacity .15s, box-shadow .2s, background .2s, border-color .2s;min-height:46px;position:relative;}
+button{font-family:var(--body);cursor:pointer;border:none;border-radius:13px;padding:13px 20px;font-weight:700;font-size:15.5px;transition:transform .16s var(--ease), opacity .15s, box-shadow .2s, background .2s, border-color .2s;min-height:46px;position:relative;backdrop-filter:blur(6px);}
 button:active{transform:scale(.96);}
-button.primary{background:linear-gradient(135deg,var(--amber),var(--amber-2));color:#241a06;box-shadow:0 3px 14px rgba(239,165,62,.32);}
-button.primary:hover{box-shadow:0 6px 20px rgba(239,165,62,.48);transform:translateY(-1px);}
+button.primary{background:linear-gradient(135deg, color-mix(in srgb, var(--amber) 94%, transparent), color-mix(in srgb, var(--amber-2) 90%, transparent));color:#241a06;box-shadow:0 3px 14px rgba(239,165,62,.32), inset 0 1px 0 rgba(255,255,255,.28);}
+button.primary:hover{box-shadow:0 6px 20px rgba(239,165,62,.48), inset 0 1px 0 rgba(255,255,255,.32);transform:translateY(-1px);}
 button.primary:active{transform:translateY(0) scale(.96);}
-button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);}
-button.ghost:hover{border-color:var(--amber);color:var(--amber);}
-button.danger{background:linear-gradient(135deg,var(--red),#c93840);color:#fff;box-shadow:0 3px 12px rgba(229,72,77,.28);}
+button.ghost{background:linear-gradient(135deg, color-mix(in srgb, var(--amber-dim) 30%, transparent), color-mix(in srgb, var(--surface-2) 35%, transparent));color:var(--text);border:1.5px solid var(--border);box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 2px 10px rgba(0,0,0,.18);}
+button.ghost:hover{border-color:var(--amber);color:var(--amber-2);background:linear-gradient(135deg, color-mix(in srgb, var(--amber-dim) 60%, transparent), color-mix(in srgb, var(--surface-3) 40%, transparent));}
+button.danger{background:linear-gradient(135deg, color-mix(in srgb, var(--red) 90%, transparent), color-mix(in srgb, #c93840 88%, transparent));color:#fff;box-shadow:0 3px 12px rgba(229,72,77,.28), inset 0 1px 0 rgba(255,255,255,.2);}
 button.danger:hover{box-shadow:0 6px 18px rgba(229,72,77,.4);transform:translateY(-1px);}
-button.subtle{background:var(--surface-2);color:var(--text);border:1px solid var(--border);}
-button.subtle:hover{background:var(--surface-3);}
+button.subtle{background:linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 78%, transparent), color-mix(in srgb, var(--surface-3) 60%, transparent));color:var(--text);border:1px solid var(--border);box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 3px 12px rgba(0,0,0,.22);}
+button.subtle:hover{background:linear-gradient(135deg, color-mix(in srgb, var(--surface-3) 88%, transparent), color-mix(in srgb, var(--surface-2) 68%, transparent));border-color:color-mix(in srgb, var(--amber) 35%, var(--border));}
 button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;transform:none;}
 button.iconbtn{padding:8px 12px;font-size:16px;min-height:auto;border-radius:10px;}
-input,select,textarea{font-family:var(--body);background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:10px;font-size:16px;width:100%;min-height:46px;transition:border-color .15s, box-shadow .15s;}
+input,select,textarea{font-family:var(--body);background:linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 92%, transparent), color-mix(in srgb, var(--surface-3) 80%, transparent));border:1.5px solid var(--border);color:var(--text);padding:13px 14px;border-radius:12px;font-size:16px;font-weight:600;width:100%;min-height:46px;transition:border-color .15s, box-shadow .15s;}
+select{cursor:pointer;}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(239,165,62,.15);}
 label{font-size:12.5px;color:var(--text-dim);display:block;margin:11px 0 5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border-soft);position:sticky;top:0;background:color-mix(in srgb, var(--surface) 88%, transparent);backdrop-filter:blur(10px);z-index:50;box-shadow:var(--shadow-sm);}
@@ -111,8 +112,9 @@ label{font-size:12.5px;color:var(--text-dim);display:block;margin:11px 0 5px;tex
 .crumbs{font-size:13px;color:var(--text-dim);margin-bottom:12px;}
 .crumbs span{cursor:pointer;color:var(--amber);}
 .crumbs span:hover{text-decoration:underline;}
-.qrow{display:flex;justify-content:space-between;align-items:center;padding:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;cursor:pointer;transition:background .18s, transform .16s var(--ease), border-color .18s, box-shadow .18s;animation:riseIn .34s var(--ease) both;}
-.qrow:hover{background:var(--amber-dim);border-color:var(--amber);transform:translateX(3px);box-shadow:var(--shadow-sm);}
+.qrow{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:linear-gradient(135deg, color-mix(in srgb, var(--amber-dim) 46%, transparent), color-mix(in srgb, var(--surface-2) 70%, transparent));border:1px solid color-mix(in srgb, var(--amber) 26%, var(--border));border-radius:14px;margin-bottom:10px;cursor:pointer;backdrop-filter:blur(8px);box-shadow:0 4px 16px -8px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04);transition:background .18s, transform .16s var(--ease), border-color .18s, box-shadow .18s;animation:riseIn .34s var(--ease) both;}
+.qrow:hover{background:linear-gradient(135deg, color-mix(in srgb, var(--amber-dim) 72%, transparent), color-mix(in srgb, var(--surface-3) 65%, transparent));border-color:var(--amber);transform:translateX(3px);box-shadow:0 6px 22px -6px rgba(239,165,62,.28), var(--shadow-sm);}
+.qrow b{color:var(--amber-2);font-weight:800;font-size:15.5px;letter-spacing:.005em;}
 .lockicon{opacity:.6;font-size:15px;}
 .exam-shell{display:grid;grid-template-columns:1fr 260px;gap:0;flex:1;}
 @media(max-width:760px){.exam-shell{grid-template-columns:1fr;}}
@@ -146,9 +148,46 @@ label{font-size:12.5px;color:var(--text-dim);display:block;margin:11px 0 5px;tex
 .reviewcard .opt.wrong{background:#2a1113;border-color:var(--red);}
 .catbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
 .catbtns button{font-size:12px;padding:7px 10px;}
+/* ---- Custom styled dropdown (replaces native <select> for subject/group pickers) ---- */
+.csel{position:relative;max-width:320px;}
+.csel-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;background:linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 90%, transparent), color-mix(in srgb, var(--surface-3) 80%, transparent));border:1.5px solid var(--border);border-radius:13px;padding:13px 16px;font-weight:700;font-size:15px;color:var(--text);cursor:pointer;min-height:48px;transition:border-color .18s, box-shadow .18s, transform .12s var(--ease);}
+.csel-trigger:hover{border-color:var(--amber);box-shadow:0 0 0 3px rgba(239,165,62,.12);}
+.csel-trigger:active{transform:scale(.98);}
+.csel-trigger .csel-tlabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.csel-trigger .csel-chev{color:var(--amber);font-size:12px;flex:0 0 auto;transition:transform .2s var(--ease);}
+.csel.open .csel-trigger .csel-chev{transform:rotate(180deg);}
+.csel.open .csel-trigger{border-color:var(--amber);box-shadow:var(--glow-amber);}
+.csel-panel{position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:80;background:color-mix(in srgb, var(--surface) 95%, transparent);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 20px 50px -14px rgba(0,0,0,.55);max-height:min(340px,60vh);overflow-y:auto;padding:8px;animation:riseIn .16s var(--ease) both;}
+.csel-opt{display:flex;align-items:center;gap:13px;padding:12px 12px;border-radius:11px;cursor:pointer;transition:background .15s;}
+.csel-opt:hover{background:var(--surface-2);}
+.csel-opt.sel{background:linear-gradient(135deg, var(--amber-dim), color-mix(in srgb, var(--amber-dim) 55%, transparent));}
+.csel-radio{width:20px;height:20px;flex:0 0 20px;border-radius:50%;border:2px solid color-mix(in srgb, var(--amber) 45%, var(--border));background:color-mix(in srgb, var(--amber) 10%, transparent);position:relative;transition:border-color .15s, background .15s, box-shadow .15s;}
+.csel-opt.sel .csel-radio{border-color:var(--amber);background:radial-gradient(circle at 35% 30%, var(--amber-2), var(--amber) 72%);box-shadow:0 0 12px -1px rgba(239,165,62,.6);}
+.csel-label{font-weight:700;font-size:14.5px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.csel-opt.sel .csel-label{color:var(--amber-2);}
 .overlay{position:fixed;inset:0;background:rgba(7,11,20,.82);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;animation:fadeIn .2s ease both;}
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;max-width:440px;width:100%;max-height:86vh;overflow-y:auto;box-shadow:0 20px 60px -12px rgba(0,0,0,.6);animation:riseIn .3s var(--ease) both;}
+.rankmodal{max-width:480px;}
+.rankmodal-head{display:flex;align-items:center;gap:12px;margin:-22px -22px 16px;padding:18px 20px;border-radius:var(--radius-lg) var(--radius-lg) 0 0;background:linear-gradient(135deg, color-mix(in srgb, var(--amber-dim) 65%, transparent), color-mix(in srgb, var(--surface-2) 60%, transparent));border-bottom:1px solid var(--border-soft);position:relative;}
+.rankmodal-icon{width:42px;height:42px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:21px;background:linear-gradient(135deg, var(--amber), var(--amber-2));box-shadow:var(--glow-amber);}
+.rankmodal-head h3{font-family:var(--display);}
+.modal-x{position:absolute;top:14px;right:14px;width:32px;height:32px;min-height:auto;padding:0;border-radius:50%;background:color-mix(in srgb, var(--surface) 60%, transparent);border:1px solid var(--border);color:var(--text-dim);font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:none;}
+.modal-x:hover{color:var(--red);border-color:var(--red);}
+.custom-set-row{transition:border-color .15s, box-shadow .15s;}
+.custom-set-row:hover{border-color:var(--amber);box-shadow:0 4px 16px -6px rgba(239,165,62,.35);}
+.codechip{font-family:var(--mono);background:var(--amber-dim);color:var(--amber-2);padding:2px 8px;border-radius:7px;font-weight:700;letter-spacing:.04em;}
+.result-card{transition:border-color .15s, box-shadow .15s;}
+.result-card:hover{border-color:color-mix(in srgb, var(--amber) 45%, var(--border));}
+.controversial-banner{background:linear-gradient(135deg, color-mix(in srgb, var(--red) 16%, transparent), color-mix(in srgb, var(--surface-2) 70%, transparent));border:1.5px solid var(--red);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-bottom:12px;}
+.querymodal{max-width:480px;}
+.querymodal-head{background:linear-gradient(135deg, color-mix(in srgb, var(--cyan-dim) 70%, transparent), color-mix(in srgb, var(--surface-2) 60%, transparent)) !important;}
+.querymodal-icon{background:linear-gradient(135deg, var(--cyan), #7fe0ee) !important;box-shadow:0 0 0 1px rgba(87,207,224,.28), 0 0 22px -4px rgba(87,207,224,.5) !important;}
+.qm-opt{cursor:pointer;transition:border-color .15s, background .15s;}
+.qm-opt:hover{border-color:var(--cyan);}
+.qm-opt.qm-picked{border-color:var(--cyan);background:linear-gradient(135deg, var(--cyan-dim), color-mix(in srgb, var(--cyan-dim) 55%, transparent));}
+.querycard{border-left:3px solid var(--cyan);}
+.querynote{font-style:italic;}
 .locked-banner{background:linear-gradient(120deg,var(--amber-dim),color-mix(in srgb, var(--amber-dim) 60%, transparent));border:1px solid var(--amber-dim);border-radius:var(--radius);padding:18px;margin-bottom:16px;}
 table.rt{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0;}
 table.rt th,table.rt td{text-align:left;padding:9px 7px;border:1px solid var(--border);}
@@ -176,6 +215,11 @@ th{color:var(--text-dim);font-weight:600;font-size:12px;text-transform:uppercase
 .diffbar-fill.easy{background:linear-gradient(180deg,var(--green),#1f8f5e);}
 .diffbar-label{font-size:12.5px;color:var(--text-dim);text-align:center;line-height:1.3;}
 .diffbar-count{font-family:var(--display);font-weight:700;font-size:16px;color:var(--text);}
+.rankbadge{display:flex;gap:10px;margin-top:14px;}
+.rankbadge-item{flex:1;text-align:center;background:linear-gradient(160deg, color-mix(in srgb, var(--amber-dim) 55%, transparent), color-mix(in srgb, var(--surface-2) 70%, transparent));border:1.5px solid var(--amber);border-radius:14px;padding:12px 8px;box-shadow:var(--glow-amber);}
+.rankbadge-num{font-family:var(--display);font-weight:800;font-size:28px;color:var(--amber-2);line-height:1.1;}
+.rankbadge-label{font-size:11.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-top:2px;font-weight:600;}
+.rankbadge-empty{text-align:center;padding:14px;border:1.5px dashed var(--border);border-radius:14px;color:var(--text-dim);font-size:13px;margin-top:14px;}
 .accbar-track{flex:1;height:8px;border-radius:6px;background:var(--surface-3);overflow:hidden;min-width:60px;}
 .accbar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--cyan),var(--green));}
 .stat-big{font-family:var(--mono);font-size:32px;font-weight:600;background:linear-gradient(135deg,var(--amber),var(--amber-2));-webkit-background-clip:text;background-clip:text;color:transparent;}
@@ -185,6 +229,33 @@ th{color:var(--text-dim);font-weight:600;font-size:12px;text-transform:uppercase
 .filepick:hover{border-color:var(--amber);}
 .themebtn{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:9px 12px;font-size:17px;min-height:auto;line-height:1;transition:transform .2s var(--ease), border-color .2s;}
 .themebtn:hover{transform:rotate(20deg);border-color:var(--amber);}
+/* ---- theme swatch picker (replaces the single cycling icon button) ---- */
+.themeSwatches{display:flex;gap:7px;align-items:center;padding:7px 9px;border-radius:100px;background:var(--surface-2);border:1px solid var(--border);}
+.swatch{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .15s var(--ease), border-color .15s, box-shadow .15s;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);}
+.swatch:hover{transform:scale(1.18);}
+.swatch.active{border-color:var(--amber);box-shadow:0 0 0 2px rgba(239,165,62,.4);}
+.swatch.dark{background:linear-gradient(135deg,#000000 0%,#182848 100%);}
+.swatch.light{background:linear-gradient(135deg,#EAD497 0%,#FFFFFF 100%);}
+.swatch.sky{background:linear-gradient(135deg,#AED7F2 0%,#FFFFFF 100%);}
+/* ---- mini progress ring, used on folder/topic cards ---- */
+.donut.sm{width:42px;height:42px;flex:none;}
+.donut.sm::after{inset:5px;}
+.donut.sm span{font-size:11px;font-weight:700;}
+/* ---- streak badge ---- */
+.streakbadge{display:inline-flex;align-items:center;gap:5px;background:var(--amber-dim);color:var(--amber-2);font-weight:700;font-size:12.5px;padding:5px 10px;border-radius:100px;box-shadow:inset 0 0 0 1px rgba(239,165,62,.3);white-space:nowrap;}
+/* ---- set-completion celebration (shown once per submit, not per answer) ---- */
+.completeOverlay{position:fixed;inset:0;z-index:400;display:flex;align-items:center;justify-content:center;background:rgba(7,11,20,.6);backdrop-filter:blur(6px);animation:fadeIn .18s ease both;}
+.completeOverlay.out{animation:completeFadeOut .32s ease both;}
+@keyframes completeFadeOut{to{opacity:0;}}
+.completeBadge{display:flex;flex-direction:column;align-items:center;gap:14px;animation:completePop .48s cubic-bezier(.34,1.56,.64,1) both;}
+@keyframes completePop{0%{transform:scale(.4);opacity:0;}60%{transform:scale(1.08);opacity:1;}100%{transform:scale(1);}}
+.completeCheck{width:88px;height:88px;border-radius:50%;background:radial-gradient(circle at 35% 30%, var(--amber-2), var(--amber) 72%);color:#241a06;font-size:44px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 8px rgba(239,165,62,.18), 0 10px 40px -8px rgba(239,165,62,.6);}
+.completeMsg{font-family:var(--display);font-weight:700;font-size:19px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.5);}
+/* ---- friendlier empty states ---- */
+.emptystate{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:44px 20px;}
+.emptystate .es-emoji{font-size:38px;}
+.emptystate .es-title{font-weight:700;color:var(--text);font-size:15.5px;}
+.emptystate .es-sub{color:var(--text-dim);font-size:13.5px;}
 .ranktbl{width:100%;border-collapse:collapse;font-size:14px;margin-top:10px;}
 .ranktbl th,.ranktbl td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:left;}
 .ranktbl th{color:var(--text-dim);font-size:11.5px;text-transform:uppercase;}
@@ -396,11 +467,73 @@ function toggleTheme(){
   const order = ['dark','light','sky'];
   const cur = currentTheme();
   const next = order[(order.indexOf(cur)+1) % order.length];
-  localStorage.setItem('qb_theme', next);
-  applyTheme();
-  render();
+  setTheme(next);
+}
+function setTheme(t){ localStorage.setItem('qb_theme', t); applyTheme(); render(); }
+// Small trio of colour-preview dots (dark/light/sky) that replaces the old
+// single cycling icon button — each swatch previews its theme's own tones
+// and jumps straight there on tap, instead of one anonymous icon you had to
+// tap repeatedly to cycle through.
+function themeSwatchesHtml(){
+  const cur = currentTheme();
+  return `<div class="themeSwatches" id="themeSwatches">
+    <span class="swatch dark ${cur==='dark'?'active':''}" data-t="dark" title="Dark"></span>
+    <span class="swatch light ${cur==='light'?'active':''}" data-t="light" title="Light"></span>
+    <span class="swatch sky ${cur==='sky'?'active':''}" data-t="sky" title="Sky"></span>
+  </div>`;
+}
+function wireThemeSwatches(){
+  const el = document.getElementById('themeSwatches');
+  if(!el) return;
+  el.querySelectorAll('.swatch').forEach(s=> s.onclick = ()=> setTheme(s.dataset.t));
 }
 applyTheme();
+
+// ---------- subject icons ----------
+// A small emoji per NEET PG subject, purely cosmetic — looked up via the
+// same detectSubject() already used to auto-classify uploaded files, so any
+// place that has a folder/group name can get a matching icon for free.
+const SUBJECT_ICONS = {
+  'Anatomy':'🦴','Physiology':'🫁','Biochemistry':'🧪','Pathology':'🔬','Pharmacology':'💊',
+  'Microbiology':'🦠','Forensic Medicine':'⚖️','Community Medicine (PSM)':'🏥','ENT':'👂',
+  'Ophthalmology':'👁️','Medicine':'🩺','Surgery':'🔪','Pediatrics':'🧸',
+  'Obstetrics & Gynaecology':'🤰','Orthopedics':'🦵','Radiology':'📡','Anesthesia':'💉',
+  'Psychiatry':'🧠','Dermatology':'🩹'
+};
+function subjectIcon(name){ const s = detectSubject(name); return s ? (SUBJECT_ICONS[s]||'📘') : '📘'; }
+
+// ---------- daily streak (client-side, per logged-in user) ----------
+// Purely a motivational touch: counts consecutive calendar days the app has
+// been opened, stored in localStorage per profile id (so it doesn't need a
+// backend column). currentStreak() just reads it for display; bumpStreak()
+// is the only thing that writes, called once per profile load.
+function streakKey(){ return `qb_streak_${S.profile?.id||'anon'}`; }
+function currentStreak(){ try{ return (JSON.parse(localStorage.getItem(streakKey())||'{}').streak)||0; }catch(e){ return 0; } }
+function bumpStreak(){
+  const today = new Date().toISOString().slice(0,10);
+  let data = {}; try{ data = JSON.parse(localStorage.getItem(streakKey())||'{}'); }catch(e){}
+  if(data.lastDate === today) return;
+  const yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
+  const streak = data.lastDate===yesterday ? (data.streak||0)+1 : 1;
+  localStorage.setItem(streakKey(), JSON.stringify({lastDate:today, streak}));
+}
+
+// ---------- set-completion celebration ----------
+// Shown once, right when a set (subject-wise or not) is submitted — never
+// per-question, since right/wrong per question only becomes visible in the
+// review/report screen, not while solving.
+function showCompletionAnim(message, cb){
+  const overlay = document.createElement('div');
+  overlay.className = 'completeOverlay';
+  overlay.innerHTML = `<div class="completeBadge"><div class="completeCheck">✓</div><div class="completeMsg">${escapeHtml(message)}</div></div>`;
+  document.body.appendChild(overlay);
+  setTimeout(()=>overlay.classList.add('out'), 1100);
+  setTimeout(()=>{ overlay.remove(); cb(); }, 1450);
+}
+// ---------- friendlier empty-state markup ----------
+function emptyStateHtml(emoji, title, sub){
+  return `<div class="card emptystate"><div class="es-emoji">${emoji}</div><div class="es-title">${escapeHtml(title)}</div>${sub?`<div class="es-sub">${escapeHtml(sub)}</div>`:''}</div>`;
+}
 
 // ---------- in-app back navigation ----------
 // The app never changes the URL, so by default the phone's/browser's back
@@ -469,6 +602,44 @@ function fmtTime(sec){
 }
 function statusOf(a){ return a ? a.status : 'not_visited'; }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Custom-styled dropdown used in place of native <select> wherever the
+// picker itself is the point of interest (e.g. the subject/group filter) —
+// native <select> popups can't be restyled on mobile (Android renders its
+// own OS list), so this renders/wires an in-page panel with our own themed
+// radio icons instead. renderCselHtml() gives the trigger markup to embed;
+// wireCsel() attaches the open/close/select behaviour right after that HTML
+// lands in the DOM.
+function renderCselHtml(id, options, selected){
+  const sel = options.find(o=>o.value===selected) || options[0] || {label:''};
+  return `<div class="csel" id="${id}">
+    <div class="csel-trigger" data-role="trigger"><span class="csel-tlabel">${escapeHtml(sel.label)}</span><span class="csel-chev">▾</span></div>
+  </div>`;
+}
+function wireCsel(id, options, selected, onSelect){
+  const root = document.getElementById(id);
+  if(!root) return;
+  const trigger = root.querySelector('[data-role="trigger"]');
+  function close(){
+    root.classList.remove('open');
+    const p = root.querySelector('.csel-panel');
+    if(p) p.remove();
+    document.removeEventListener('click', onDocClick, true);
+  }
+  function onDocClick(e){ if(!root.contains(e.target)) close(); }
+  trigger.onclick = (e)=>{
+    e.stopPropagation();
+    if(root.classList.contains('open')){ close(); return; }
+    root.classList.add('open');
+    const panel = document.createElement('div');
+    panel.className = 'csel-panel';
+    panel.innerHTML = options.map(o=>`<div class="csel-opt ${o.value===selected?'sel':''}" data-v="${escapeHtml(o.value)}"><span class="csel-radio"></span><span class="csel-label">${escapeHtml(o.label)}</span></div>`).join('');
+    root.appendChild(panel);
+    panel.querySelectorAll('.csel-opt').forEach(row=>{
+      row.onclick = ()=>{ close(); onSelect(row.dataset.v); };
+    });
+    setTimeout(()=>document.addEventListener('click', onDocClick, true), 0);
+  };
+}
 
 // Rich text renderer: supports plain text, **bold**, line breaks, and
 // pipe tables (for "match the following" / tabular questions). Input is
@@ -592,6 +763,7 @@ async function loadProfile(){
     startExpiryWatcher();
   }
   S.view = S.profile?.role==='admin' ? 'admin' : 'user';
+  if(S.profile) bumpStreak();
 }
 // Re-checks the logged-in user's own status/expiry every couple of minutes
 // so an expiry that lands *during* an open session (or an admin
@@ -657,6 +829,7 @@ function render(){
 function topbar(title, right=''){
   const isLight = document.documentElement.classList.contains('light');
   const p = S.profile;
+  const streak = p && p.role!=='admin' ? currentStreak() : 0;
   const who = (p && p.role!=='admin' && p.name) ? `<div class="row" style="gap:11px;align-items:center;margin-right:6px;">
     ${p.avatar_url ? `<img src="${p.avatar_url}" alt="" style="width:46px;height:46px;border-radius:50%;object-fit:cover;border:2px solid var(--amber);">`
                     : `<div style="width:46px;height:46px;border-radius:50%;background:var(--amber-dim);color:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;font-family:var(--display);border:2px solid var(--amber);">${escapeHtml(p.name[0]||'?').toUpperCase()}</div>`}
@@ -664,12 +837,13 @@ function topbar(title, right=''){
       <div style="font-weight:700;font-size:17px;">${escapeHtml(p.name)}</div>
       ${p.batch?`<div class="muted" style="font-size:13px;">Batch ${escapeHtml(p.batch)}</div>`:''}
     </div>
+    ${streak>1 ? `<span class="streakbadge">🔥 ${streak}d</span>` : ''}
   </div>` : '';
-  return `<div class="topbar"><div class="brand"><span class="dot"></span>${title}</div><div class="row">${who}${right}<button class="themebtn" id="themeBtn" title="Switch theme">${themeIcon(currentTheme())}</button><button class="ghost" id="signoutBtn" style="padding:8px 12px;font-size:13px;">Sign out</button></div></div>`;
+  return `<div class="topbar"><div class="brand"><span class="dot"></span>${title}</div><div class="row">${who}${right}${themeSwatchesHtml()}<button class="ghost" id="signoutBtn" style="padding:8px 12px;font-size:13px;">Sign out</button></div></div>`;
 }
 function bindTopbar(){
   const b=document.getElementById('signoutBtn'); if(b) b.onclick=signOut;
-  const tb=document.getElementById('themeBtn'); if(tb) tb.onclick=toggleTheme;
+  wireThemeSwatches();
 }
 async function signOut(){ if(expiryWatcherHandle){ clearInterval(expiryWatcherHandle); expiryWatcherHandle=null; } await sb.auth.signOut(); S.profile=null; S.deviceBlocked=false; render(); }
 
@@ -678,7 +852,7 @@ function renderAuth(){
   S.authMode = S.authMode || 'login';
   app.innerHTML = `
   <div class="container" style="max-width:420px;padding-top:14vh;">
-    <div class="row" style="justify-content:flex-end;"><button class="themebtn" id="themeBtn">${themeIcon(currentTheme())}</button></div>
+    <div class="row" style="justify-content:flex-end;">${themeSwatchesHtml()}</div>
     <div style="text-align:center;margin-bottom:22px;">
       <div class="brand" style="justify-content:center;font-size:28px;"><span class="dot"></span><span style="background:linear-gradient(135deg,var(--amber),var(--amber-2));-webkit-background-clip:text;background-clip:text;color:transparent;">QBank Console</span></div>
       <p class="muted" style="margin-top:6px;">CBT-style practice for NEET PG / INICET</p>
@@ -712,7 +886,7 @@ function renderAuth(){
     </div>
   </div>`;
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{S.authMode=t.dataset.m; renderAuth();});
-  document.getElementById('themeBtn').onclick = toggleTheme;
+  wireThemeSwatches();
   document.getElementById('authGo').onclick = async ()=>{
     S.authNotice = null;
     const email=document.getElementById('email').value.trim();
@@ -788,6 +962,7 @@ async function renderUser(){
     <div class="tab ${S.utab==='stats'?'on':''}" data-t="stats">Today's stats</div>
     <div class="tab ${S.utab==='decks'?'on':''}" data-t="decks">Category decks</div>
     <div class="tab ${S.utab==='custom'?'on':''}" data-t="custom">Custom test</div>
+    <div class="tab ${S.utab==='results'?'on':''}" data-t="results">My Results</div>
     <div class="tab ${S.utab==='sub'?'on':''}" data-t="sub">Subscription</div>
   </div><div id="utabBody"><div class="muted" style="padding:20px 0;">Loading…</div></div>`;
   wrap.querySelectorAll('.tab[data-t]').forEach(t=>t.onclick=()=>{ if(t.dataset.t===S.utab) return; goTo({utab:t.dataset.t, nav:{}}); });
@@ -802,6 +977,7 @@ async function renderUser(){
   if(S.utab==='stats') return loadStatsTab();
   if(S.utab==='decks') return loadDecksTab();
   if(S.utab==='custom') return loadCustomTab(isActive);
+  if(S.utab==='results') return loadResultsTab();
   if(S.utab==='sub') return loadSubTab();
 }
 
@@ -857,7 +1033,7 @@ async function loadCategoryList(isActive){
   body.innerHTML += crumbBar([{label:'QBanks', onClick:true},{label:qb?.name||'QBank'}]);
   const folders = await fetchAllRows(()=>sb.from('folders').select('id, name, exam_type').eq('qbank_id', S.nav.qbankId));
   if(myToken !== navToken) return;
-  if(!folders || !folders.length){ document.getElementById('utabBody').innerHTML += `<div class="card muted">No sections in this qbank yet.</div>`; return; }
+  if(!folders || !folders.length){ document.getElementById('utabBody').innerHTML += emptyStateHtml('📭', 'No sections in this qbank yet', 'Check back soon — content is on its way.'); return; }
   const byCat = {};
   folders.forEach(f=>{ const c=categoryOf(f); (byCat[c]=byCat[c]||[]).push(f); });
   let html = '<div class="grid">';
@@ -893,38 +1069,34 @@ async function loadFolderList(isActive){
   function renderList(filterGroup, loading){
     if(myToken !== navToken) return;
     let html = '';
+    let groupOptions = null;
     if(groups.length>1){
-      html += `<div class="row" style="margin-bottom:14px;">
-        <select id="folderGroupSel" style="max-width:280px;">
-          <option value="__all__">All in ${S.nav.category} (${folders.length})</option>
-          ${groups.map(g=>{
-            const n = folders.filter(f=>groupOf(f.name)===g).length;
-            return `<option value="${g}" ${g===filterGroup?'selected':''}>${g} (${n})</option>`;
-          }).join('')}
-        </select>
-      </div>`;
+      groupOptions = [{value:'__all__', label:`📚 All in ${S.nav.category} (${folders.length})`}].concat(
+        groups.map(g=>({ value:g, label:`${subjectIcon(g)} ${g} (${folders.filter(f=>groupOf(f.name)===g).length})` }))
+      );
+      html += `<div class="row" style="margin-bottom:14px;">${renderCselHtml('folderGroupSel', groupOptions, filterGroup)}</div>`;
     }
     const visible = folders.filter(f=> filterGroup==='__all__' || groupOf(f.name)===filterGroup);
     if(!visible.length){
-      html += `<div class="card muted">No sections in this group.</div>`;
+      html += emptyStateHtml('🗂️', 'No sections in this group', 'Try a different subject filter above.');
     } else {
       visible.forEach(f=>{
         const rank = f._rank;
         const pct = rank && rank.user_total ? Math.round((rank.user_correct/rank.user_total)*1000)/10 : null;
-        html += `<div class="qrow" data-folder="${f.id}" style="flex-direction:column;align-items:stretch;gap:5px;">
-          <div class="row" style="justify-content:space-between;">
-            <b>${leafNameOf(f.name)}</b>
+        html += `<div class="qrow" data-folder="${f.id}" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="row" style="justify-content:space-between;align-items:center;">
+            <b>${subjectIcon(f.name)} ${leafNameOf(f.name)}</b>
+            ${pct!=null ? `<div class="donut sm" style="--pct:${pct}"><span>${pct}%</span></div>` : ''}
           </div>
-          <div class="muted" style="font-size:13px;">${loading ? 'loading details…' : `${f._setCount||0} subsection${f._setCount===1?'':'s'} · ~${f._avgPerSet||0} question${f._avgPerSet===1?'':'s'} each · ${f._count||0} total${!f.exam_type?' · not set up yet':''}`}</div>
-          ${pct!=null ? `<div class="muted" style="font-size:12.5px;color:var(--amber);">Your score: ${pct}%${rank.rank?` · ${rank.percentile}ᵗʰ percentile (updates as more people attempt)`:' · not enough attempts yet to rank'}</div>` : ''}
+          <div class="muted" style="font-size:12.5px;">${!f.exam_type ? 'Not set up yet' : '📋 Read the instructions before you start'}</div>
+          ${pct!=null ? `<div class="muted" style="font-size:12px;color:var(--amber);">${rank.rank?`${rank.percentile}ᵗʰ percentile (updates as more people attempt)`:'Not enough attempts yet to rank'}</div>` : ''}
         </div>`;
       });
     }
     const listArea = document.getElementById('folderListArea');
     if(!listArea) return;
     listArea.innerHTML = html;
-    const sel = document.getElementById('folderGroupSel');
-    if(sel) sel.onchange = (e)=>{ curFilterGroup = e.target.value; renderList(curFilterGroup, loading); };
+    if(groupOptions) wireCsel('folderGroupSel', groupOptions, filterGroup, (v)=>{ curFilterGroup = v; renderList(curFilterGroup, loading); });
     document.querySelectorAll('[data-folder]').forEach(el=>{
       el.onclick = async ()=>{
         const fid = el.dataset.folder;
@@ -978,6 +1150,35 @@ async function loadFolderList(isActive){
   });
   renderList(curFilterGroup, false);
 }
+// Shared "before you start" disclaimer card — shown once per folder (any
+// exam pattern, including subject-wise) before its sets are revealed, and
+// reused verbatim before a user starts a self-built custom test, so the
+// same rules/timer/palette explanation appears everywhere a timed set is
+// about to begin, not just the sequential exam patterns.
+function instructionsCardHtml(opts){
+  const { title, totalQ, totalMin, setCount, sequential, setRowsHtml } = opts;
+  return `<div class="card">
+      <h3>📋 Before you start — ${escapeHtml(title)}</h3>
+      <ul style="margin:10px 0; padding-left:20px; line-height:1.7;">
+        <li>${setCount>1 ? `This section has <b>${totalQ} questions</b> split into <b>${setCount} timed sets</b>, totaling <b>${totalMin} minutes</b>.` : `This set has <b>${totalQ} questions</b>, timed at <b>${totalMin} minutes</b>.`}</li>
+        <li>Each set has its <b>own timer</b>. When a set's timer runs out, it auto-submits with whatever you've answered so far.</li>
+        ${sequential ? `<li>Sets must be done <b>in order</b> — a set unlocks only after you submit the one before it. You can't go back and reopen a submitted set.</li>` : ''}
+        <li>Don't refresh, close the tab, or switch apps mid-set — the timer keeps running in the background regardless.</li>
+        <li>Attempt every question if you can; there's no going back once a set is submitted, so mark your best answer before time runs out.</li>
+        <li>Once every set is submitted, you'll see your full report card — score, rank, and question-difficulty breakdown.</li>
+      </ul>
+      ${setRowsHtml ? `<div class="muted" style="font-size:12px;margin-top:14px;">Time per set</div><div style="margin:6px 0 4px;">${setRowsHtml}</div>` : ''}
+      <div class="muted" style="font-size:12px;margin-top:14px;">Question palette colours (shown while you attempt)</div>
+      <div class="legend" style="margin-top:6px;">
+        <div><span style="background:var(--gray)"></span>Not visited</div>
+        <div><span style="background:var(--red)"></span>Not answered</div>
+        <div><span style="background:var(--green)"></span>Answered</div>
+        <div><span style="background:var(--purple)"></span>Marked for review</div>
+        <div><span style="background:var(--purple);box-shadow:inset 0 0 0 2px var(--green)"></span>Answered &amp; marked</div>
+      </div>
+      <button class="primary" id="startExamBtn" style="margin-top:16px;">Start Exam</button>
+    </div>`;
+}
 async function loadFolderSets(isActive){
   const myToken = navToken;
   const body=document.getElementById('utabBody');
@@ -994,7 +1195,7 @@ async function loadFolderSets(isActive){
   const { data: sets } = await sb.from('sets').select('*').eq('folder_id', folder.id).is('user_id', null).order('subject').order('set_number');
   if(myToken !== navToken) return;
   let html = '';
-  if(!sets || !sets.length){ html = `<div class="card muted">No sets generated for this section yet.</div>`; document.getElementById('utabBody').innerHTML += html; return; }
+  if(!sets || !sets.length){ html = emptyStateHtml('🧩', 'No sets generated for this section yet', 'The admin hasn\'t added questions here yet.'); document.getElementById('utabBody').innerHTML += html; return; }
 
   // Everything every set row needs (this user's latest attempt, and its
   // rank stats) is fetched up front in a small, fixed number of batched
@@ -1013,41 +1214,22 @@ async function loadFolderSets(isActive){
   attemptedIds.forEach((sid,i)=>{ const r = rankResults[i].data; rankBySet[sid] = Array.isArray(r)?r[0]:r; });
   const byNum = {}; sets.forEach(s=>{ byNum[s.set_number] = s; });
 
-  // For full-length sequential patterns (INICET / NEET PG / auto-subsection —
-  // anything that isn't the subject-wise practice mode), show a one-time
-  // instructions screen with a "Start Exam" button before the section's
-  // sets are revealed, the first time this user opens it with nothing
-  // attempted yet. Re-opening later (or once something's been attempted)
-  // skips straight to the sets list as before.
+  // Show a one-time instructions/disclaimer screen with a "Start Exam"
+  // button before a section's sets are revealed, the first time this user
+  // opens it with nothing attempted yet — for every exam pattern, including
+  // subject-wise sections (not just the sequential full-length patterns).
+  // Re-opening later (or once something's been attempted) skips straight to
+  // the sets list as before.
   const cfg = EXAM_CONFIG[folder.exam_type];
-  if(cfg && cfg.sequential && attemptedIds.length===0 && !(S.instructionsAcked && S.instructionsAcked[folder.id])){
+  if(cfg && attemptedIds.length===0 && !(S.instructionsAcked && S.instructionsAcked[folder.id])){
     const totalQ = sets.reduce((n,s)=>n+(s.question_ids?.length||0),0);
     const totalMin = Math.round(sets.reduce((n,s)=>n+(s.duration_minutes||0),0));
     const setRowsHtml = sets.map(s=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
         <span>Set ${s.set_number}</span><span class="muted">${(s.question_ids?.length||0)} questions · ${s.duration_minutes} min</span>
       </div>`).join('');
-    document.getElementById('utabBody').innerHTML += `<div class="card">
-      <h3>📋 Before you start — ${leafNameOf(folder.name)}</h3>
-      <ul style="margin:10px 0; padding-left:20px; line-height:1.7;">
-        <li>This section has <b>${totalQ} questions</b> split into <b>${sets.length} timed set${sets.length===1?'':'s'}</b>, totaling <b>${totalMin} minutes</b>.</li>
-        <li>Each set has its <b>own timer</b>. When a set's timer runs out, it auto-submits with whatever you've answered so far.</li>
-        <li>Sets must be done <b>in order</b> — a set unlocks only after you submit the one before it. You can't go back and reopen a submitted set.</li>
-        <li>Don't refresh, close the tab, or switch apps mid-set — the timer keeps running in the background regardless.</li>
-        <li>Attempt every question if you can; there's no going back once a set is submitted, so mark your best answer before time runs out.</li>
-        <li>Once every set is submitted, you'll see your full report card — score, rank, and question-difficulty breakdown.</li>
-      </ul>
-      <div class="muted" style="font-size:12px;margin-top:14px;">Time per set</div>
-      <div style="margin:6px 0 4px;">${setRowsHtml}</div>
-      <div class="muted" style="font-size:12px;margin-top:14px;">Question palette colours (shown while you attempt)</div>
-      <div class="legend" style="margin-top:6px;">
-        <div><span style="background:var(--gray)"></span>Not visited</div>
-        <div><span style="background:var(--red)"></span>Not answered</div>
-        <div><span style="background:var(--green)"></span>Answered</div>
-        <div><span style="background:var(--purple)"></span>Marked for review</div>
-        <div><span style="background:var(--purple);box-shadow:inset 0 0 0 2px var(--green)"></span>Answered & marked</div>
-      </div>
-      <button class="primary" id="startExamBtn" style="margin-top:16px;">Start Exam</button>
-    </div>`;
+    document.getElementById('utabBody').innerHTML += instructionsCardHtml({
+      title: leafNameOf(folder.name), totalQ, totalMin, setCount: sets.length, sequential: cfg.sequential, setRowsHtml
+    });
     document.getElementById('startExamBtn').onclick = ()=>{
       S.instructionsAcked = S.instructionsAcked || {};
       S.instructionsAcked[folder.id] = true;
@@ -1061,7 +1243,7 @@ async function loadFolderSets(isActive){
     sets.forEach(s=>{ (bySubject[s.subject||'General']=bySubject[s.subject||'General']||[]).push(s); });
     for(const subj in bySubject){
       if(myToken !== navToken) return;
-      html += `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${subj}</div>`;
+      html += `<div style="margin:14px 0 6px;font-weight:800;font-size:15px;color:var(--amber-2);">${subjectIcon(subj)} ${escapeHtml(subj)}</div>`;
       for(const s of bySubject[subj]) html += setRow(s, isActive, false, attemptBySet[s.id], rankBySet[s.id]);
     }
   } else {
@@ -1087,7 +1269,7 @@ async function loadFolderSets(isActive){
           html += `<div class="card" style="margin-top:14px;">
             <h3>Section total so far (${frow.sets_completed}/${frow.sets_total} subsections)</h3>
             <div class="muted">✅ ${frow.user_correct}/${frow.user_total} correct (${fpct}%) · score ${frow.user_score>0?'+':''}${frow.user_score}</div>
-            <div class="muted" style="margin-top:4px;">${frow.rank ? `Rank ${frow.rank}/${frow.total_attempts} · ${frow.percentile}ᵗʰ percentile` : 'Not enough other users\' totals yet to rank against.'}</div>
+            ${rankBadgeHtml(frow)}
           </div>`;
         } else {
           // Full report card — only built once, right when the section is
@@ -1111,9 +1293,9 @@ async function loadFolderSets(isActive){
               <div>
                 <div style="font-size:16px;"><b>${frow.user_correct}/${frow.user_total}</b> correct</div>
                 <div class="muted" style="margin-top:2px;">Score: ${frow.user_score>0?'+':''}${frow.user_score}</div>
-                <div class="muted" style="margin-top:2px;">${frow.rank ? `Rank ${frow.rank}/${frow.total_attempts} · ${frow.percentile}ᵗʰ percentile — updates as more people attempt` : 'Not enough other users\' totals yet to rank against.'}</div>
               </div>
             </div>
+            ${rankBadgeHtml(frow)}
             <div style="margin-top:24px;">
               <div class="muted" style="margin-bottom:4px;">Question difficulty — based on how everyone has done on these so far</div>
               <div class="diffbars">
@@ -1137,6 +1319,16 @@ async function loadFolderSets(isActive){
   wireSetRows();
   const ftBtn = document.getElementById('fullTestBtn');
   if(ftBtn) ftBtn.onclick = ()=> loadFullTestReview(folder.id);
+}
+function rankBadgeHtml(rankRow){
+  if(rankRow && rankRow.rank){
+    return `<div class="rankbadge">
+      <div class="rankbadge-item"><div class="rankbadge-num">#${rankRow.rank}</div><div class="rankbadge-label">Rank of ${rankRow.total_attempts}</div></div>
+      <div class="rankbadge-item"><div class="rankbadge-num">${rankRow.percentile}<span style="font-size:15px;">ᵗʰ</span></div><div class="rankbadge-label">Percentile</div></div>
+    </div>
+    <div class="muted" style="text-align:center;font-size:11.5px;margin-top:5px;">Updates as more people attempt</div>`;
+  }
+  return `<div class="rankbadge-empty">Not enough other attempts yet to rank against — check back later, this updates automatically.</div>`;
 }
 function setRow(s, isActive, locked=false, att=null, rankRow=null){
   const n = s.question_ids.length;
@@ -1191,7 +1383,7 @@ async function openReviewForSet(setId){
   // Same reasoning as startAttempt: skip the (possibly large, embedded-base64)
   // image_url in this bulk fetch so review opens quickly; images are loaded
   // lazily per-question as you page through (see ensureQuestionImage).
-  const { data: qs } = await sb.from('questions').select('id, q_text, options, correct_index, explanation, subject').in('id', s.question_ids);
+  const { data: qs } = await sb.from('questions').select('id, q_text, options, correct_index, explanation, subject, is_controversial').in('id', s.question_ids);
   const questions = s.question_ids.map(id=>qs.find(q=>q.id===id)).filter(Boolean);
   // Community accuracy per question, fetched once for the whole set (not
   // per question) so paging through review stays instant.
@@ -1206,7 +1398,7 @@ async function loadFullTestReview(folderId){
   for(const s of sets){
     const { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', s.id).eq('status','submitted').order('submitted_at',{ascending:false}).limit(1).maybeSingle();
     if(!att){ toast('Complete every section first'); return; }
-    const { data: qs } = await sb.from('questions').select('id, q_text, options, correct_index, explanation, subject').in('id', s.question_ids);
+    const { data: qs } = await sb.from('questions').select('id, q_text, options, correct_index, explanation, subject, is_controversial').in('id', s.question_ids);
     const ordered = s.question_ids.map(id=>qs.find(q=>q.id===id)).filter(Boolean);
     allQuestions = allQuestions.concat(ordered);
     Object.assign(mergedAnswers, att.answers);
@@ -1404,6 +1596,53 @@ async function startCategoryDeck(folderId, category){
 // and their own mistake-category tags), and share it with a short code that
 // only other active users can redeem. See generateSetsForFolder's chunking
 // for where the "leftover chunk gets 0.9 min/question" rule is mirrored here.
+let ctState = { platform: '__all__', source: 'all', difficulty: 'all', category: 'all' };
+function ctOptionSets(qbanks){
+  return {
+    platform: [{value:'__all__',label:'🌐 All platforms'}, ...qbanks.map(q=>({value:q.id,label:q.name}))],
+    source: [
+      {value:'all',label:'🗂️ All (subject-wise + PYQ + GT + everything)'},
+      {value:'subjectwise',label:'📘 Subject-wise / topic-wise'},
+      {value:'pyq',label:'📝 PYQ'},
+      {value:'gt',label:'🏆 GT'},
+    ],
+    difficulty: [
+      {value:'all',label:'⚪ All'},
+      {value:'hard',label:'🔴 Hard — most people got it wrong'},
+      {value:'medium',label:'🟡 Medium'},
+      {value:'easy',label:'🟢 Easy — most people got it right'},
+    ],
+    category: [
+      {value:'all',label:'🏷️ All (tagged or not, doesn\'t matter)'},
+      {value:'none',label:'🆕 None — only questions I haven\'t tagged'},
+      ...CATS.map(c=>({value:c.key,label:`${c.label} only`})),
+    ],
+  };
+}
+function renderBuildCard(qbanks){
+  const card = document.getElementById('ctBuildCard');
+  if(!card) return;
+  const opts = ctOptionSets(qbanks);
+  card.innerHTML = `
+    <h3>🧩 Build your own set</h3>
+    <p class="muted">Pulls from whichever platform/section combo you pick below, filtered the way you want. Every regenerate with the same options gives you fresh questions — never a repeat of a set you already made this way.</p>
+    <label>Platform</label>
+    ${renderCselHtml('ctPlatformSel', opts.platform, ctState.platform)}
+    <label>Question source</label>
+    ${renderCselHtml('ctSourceSel', opts.source, ctState.source)}
+    <label>Difficulty (based on how everyone else has scored on it)</label>
+    ${renderCselHtml('ctDifficultySel', opts.difficulty, ctState.difficulty)}
+    <label>Your mistake-category tags</label>
+    ${renderCselHtml('ctCategorySel', opts.category, ctState.category)}
+    <button class="primary" id="ctBuild" style="margin-top:18px;">✨ Create my set (50 q / 45 min)</button>
+    <div id="ctStatus" class="muted" style="margin-top:10px; white-space:pre-line;"></div>
+    <div id="ctResult" style="margin-top:12px;"></div>`;
+  wireCsel('ctPlatformSel', opts.platform, ctState.platform, v=>{ ctState.platform=v; renderBuildCard(qbanks); });
+  wireCsel('ctSourceSel', opts.source, ctState.source, v=>{ ctState.source=v; renderBuildCard(qbanks); });
+  wireCsel('ctDifficultySel', opts.difficulty, ctState.difficulty, v=>{ ctState.difficulty=v; renderBuildCard(qbanks); });
+  wireCsel('ctCategorySel', opts.category, ctState.category, v=>{ ctState.category=v; renderBuildCard(qbanks); });
+  document.getElementById('ctBuild').onclick = ()=>buildCustomSet(qbanks);
+}
 async function loadCustomTab(isActive){
   const body = document.getElementById('utabBody');
   if(!isActive){ return; }
@@ -1414,53 +1653,22 @@ async function loadCustomTab(isActive){
   if(!qbanks || !qbanks.length){ body.innerHTML = `<div class="card muted">No qbanks yet.</div>`; return; }
 
   body.innerHTML = `
+  <div class="card" id="ctBuildCard"></div>
   <div class="card">
-    <h3>Build your own set</h3>
-    <p class="muted">Pulls from whichever platform/section combo you pick below, filtered the way you want. Every regenerate with the same options gives you fresh questions — never a repeat of a set you already made this way.</p>
-    <label>Platform</label>
-    <select id="ctPlatform">
-      <option value="__all__">All platforms</option>
-      ${qbanks.map(q=>`<option value="${q.id}">${q.name}</option>`).join('')}
-    </select>
-    <label>Question source</label>
-    <select id="ctSource">
-      <option value="all">All (subject-wise + PYQ + GT + everything)</option>
-      <option value="subjectwise">Subject-wise / topic-wise</option>
-      <option value="pyq">PYQ</option>
-      <option value="gt">GT</option>
-    </select>
-    <label>Difficulty (based on how everyone else has scored on it)</label>
-    <select id="ctDifficulty">
-      <option value="all">All</option>
-      <option value="hard">Hard — most people got it wrong</option>
-      <option value="medium">Medium</option>
-      <option value="easy">Easy — most people got it right</option>
-    </select>
-    <label>Your mistake-category tags</label>
-    <select id="ctCategory">
-      <option value="all">All (tagged or not, doesn't matter)</option>
-      <option value="none">None — only questions I haven't tagged</option>
-      ${CATS.map(c=>`<option value="${c.key}">${c.label} only</option>`).join('')}
-    </select>
-    <button class="primary" id="ctBuild" style="margin-top:16px;">Create my set (50 q / 45 min)</button>
-    <div id="ctStatus" class="muted" style="margin-top:10px; white-space:pre-line;"></div>
-    <div id="ctResult" style="margin-top:12px;"></div>
-  </div>
-  <div class="card">
-    <h3>Have a code?</h3>
+    <h3>🔑 Have a code?</h3>
     <p class="muted">Enter a set code someone shared with you. Only works while your subscription is active.</p>
     <div class="row">
       <input id="ctCode" placeholder="e.g. 7F3K9Q" style="flex:1;max-width:200px;text-transform:uppercase;">
-      <button class="subtle" id="ctRedeem">Go</button>
+      <button class="primary" id="ctRedeem">Redeem →</button>
     </div>
     <div id="ctRedeemStatus" class="muted" style="margin-top:8px;"></div>
   </div>
   <div class="card">
-    <h3>Your custom sets</h3>
+    <h3>📚 Your custom sets</h3>
     <div id="ctMySets" class="muted">Loading…</div>
   </div>`;
 
-  document.getElementById('ctBuild').onclick = buildCustomSet;
+  renderBuildCard(qbanks);
   document.getElementById('ctRedeem').onclick = redeemShareCode;
   loadMyCustomSets();
 }
@@ -1473,11 +1681,14 @@ async function loadMyCustomSets(){
   if(!mySets || !mySets.length){ el.innerHTML = 'None yet — build one above.'; return; }
   el.innerHTML = mySets.map(s=>{
     const n = (s.question_ids||[]).length;
-    return `<div class="qrow" data-cs="${s.id}">
-      <div><b>${escapeHtml(s.subject||'Custom set')}</b> · ${n} q · ${s.duration_minutes} min ${s.share_code?`· code <span style="font-family:var(--mono);">${s.share_code}</span>`:''}</div>
+    return `<div class="qrow custom-set-row" data-cs="${s.id}">
+      <div>
+        <div style="font-weight:700;">🧩 ${escapeHtml(s.subject||'Custom set')}</div>
+        <div class="muted" style="font-size:12.5px;margin-top:2px;">${n} q · ⏱️ ${s.duration_minutes} min ${s.share_code?`· <span class="codechip">🔑 ${s.share_code}</span>`:''}</div>
+      </div>
       <div class="row">
-        <button class="subtle" data-rank="${s.id}">Rank list</button>
-        <button class="primary" data-open="${s.id}">Open</button>
+        <button class="subtle iconbtn" data-rank="${s.id}" title="Rank list">🏆 Rank</button>
+        <button class="primary iconbtn" data-open="${s.id}" title="Open">▶ Open</button>
       </div>
     </div>`;
   }).join('');
@@ -1488,10 +1699,17 @@ async function loadMyCustomSets(){
 async function viewCustomRankList(setId){
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
-  overlay.innerHTML = `<div class="modal"><h3>Rank list</h3><div id="crlBody" class="muted">Loading…</div>
-    <button class="ghost" id="crlClose" style="margin-top:14px;width:100%;">Close</button></div>`;
+  overlay.innerHTML = `<div class="modal rankmodal">
+    <div class="rankmodal-head">
+      <div class="rankmodal-icon">🏆</div>
+      <div><h3 style="margin:0;">Rank list</h3><div class="muted" style="font-size:12.5px;">See where you stand on this set</div></div>
+      <button class="modal-x" id="crlClose" title="Close">✕</button>
+    </div>
+    <div id="crlBody" class="muted">Loading…</div>
+  </div>`;
   document.body.appendChild(overlay);
   document.getElementById('crlClose').onclick = ()=> overlay.remove();
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.remove(); });
 
   const [{ data: mine, error: mineErr }, { data: list, error: listErr }] = await Promise.all([
     sb.rpc('set_rank_stats', { p_set_id: setId, p_user_id: S.profile.id }),
@@ -1504,9 +1722,9 @@ async function viewCustomRankList(setId){
   let html = '';
   if(myRow && myRow.user_total){
     const pct = Math.round((myRow.user_correct/myRow.user_total)*1000)/10;
-    html += `<div class="card" style="background:var(--amber-dim);border-color:var(--amber);margin-bottom:12px;">
-      <div><b>Your result:</b> ${myRow.user_correct}/${myRow.user_total} correct (${pct}%)</div>
-      <div class="muted" style="margin-top:4px;">${myRow.rank ? `Rank ${myRow.rank}/${myRow.total_attempts} · ${myRow.percentile}ᵗʰ percentile` : 'Not enough attempts yet to rank against.'}</div>
+    html += `<div class="card" style="background:var(--amber-dim);border-color:var(--amber);margin-bottom:14px;">
+      <div>🎯 <b>Your result:</b> ${myRow.user_correct}/${myRow.user_total} correct (${pct}%)</div>
+      ${rankBadgeHtml(myRow)}
     </div>`;
   } else {
     html += `<p class="muted">You haven't submitted this set yet.</p>`;
@@ -1516,21 +1734,21 @@ async function viewCustomRankList(setId){
     html += `<p class="muted">No submitted attempts on this set yet.</p>`;
   } else {
     html += `<div style="overflow-x:auto;"><table class="ranktbl"><tr><th>Rank</th><th>Name</th><th>Correct</th><th>Score</th></tr>
-      ${rows.map(r=>`<tr class="${r.is_me?'me':''}"><td>${r.rnk}</td><td>${escapeHtml(r.name||'—')}</td><td>${r.correct_count}/${r.total_questions}</td><td>${r.score>0?'+':''}${r.score}</td></tr>`).join('')}
+      ${rows.map(r=>`<tr class="${r.is_me?'me':''}"><td>${r.rnk<=3?['🥇','🥈','🥉'][r.rnk-1]:r.rnk}</td><td>${escapeHtml(r.name||'—')}</td><td>${r.correct_count}/${r.total_questions}</td><td>${r.score>0?'+':''}${r.score}</td></tr>`).join('')}
     </table></div>`;
   }
   body.innerHTML = html;
 }
 
-async function buildCustomSet(){
+async function buildCustomSet(qbanks){
   const st = document.getElementById('ctStatus');
   const resultEl = document.getElementById('ctResult');
   resultEl.innerHTML = '';
   st.textContent = 'Building your set…';
-  const qbankId = document.getElementById('ctPlatform').value;
-  const source = document.getElementById('ctSource').value;
-  const difficulty = document.getElementById('ctDifficulty').value;
-  const category = document.getElementById('ctCategory').value;
+  const qbankId = ctState.platform;
+  const source = ctState.source;
+  const difficulty = ctState.difficulty;
+  const category = ctState.category;
 
   const folders = await fetchAllRows(()=> qbankId==='__all__'
     ? sb.from('folders').select('id, name, exam_type, qbank_id')
@@ -1599,7 +1817,7 @@ async function buildCustomSet(){
   const sourceLabel = {all:'All', subjectwise:'Subject-wise', pyq:'PYQ', gt:'GT'}[source];
   const diffLabel = {all:'All', hard:'Hard', medium:'Medium', easy:'Easy'}[difficulty];
   const catLabel = category==='all' ? 'All' : category==='none' ? 'None' : CATS.find(c=>c.key===category)?.label;
-  const platformLabel = qbankId==='__all__' ? 'All platforms' : document.getElementById('ctPlatform').selectedOptions[0].textContent;
+  const platformLabel = qbankId==='__all__' ? 'All platforms' : (qbanks.find(q=>q.id===qbankId)?.name || 'Platform');
   const label = `Custom: ${platformLabel} · ${sourceLabel} · ${diffLabel} · ${catLabel}`;
 
   const ins = await sb.from('sets').insert({
@@ -1610,15 +1828,22 @@ async function buildCustomSet(){
   if(ins.error){ st.textContent = 'Could not create set: ' + ins.error.message; return; }
 
   st.textContent = '';
-  resultEl.innerHTML = `<div class="qrow" style="cursor:default;">
-    <div><b>${picked.length} questions</b> · ${duration} min</div>
-    <div class="row"><button class="primary" id="ctStart">Start now</button><button class="subtle" id="ctShare">Get share code</button></div>
+  resultEl.innerHTML = `<div class="qrow custom-set-row" style="cursor:default;">
+    <div>✅ <b>${picked.length} questions</b> · ⏱️ ${duration} min</div>
+    <div class="row"><button class="primary iconbtn" id="ctStart">▶ Start now</button><button class="subtle iconbtn" id="ctShare">🔗 Get share code</button></div>
   </div><div id="ctShareOut" class="muted" style="margin-top:8px;"></div>`;
-  document.getElementById('ctStart').onclick = ()=> startAttempt(ins.data.id, ins.data);
+  document.getElementById('ctStart').onclick = ()=>{
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.innerHTML = `<div class="modal">${instructionsCardHtml({ title: label, totalQ: picked.length, totalMin: duration, setCount: 1, sequential: false })}</div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#startExamBtn').onclick = ()=>{ overlay.remove(); startAttempt(ins.data.id, ins.data); };
+    overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.remove(); });
+  };
   document.getElementById('ctShare').onclick = async ()=>{
     const code = await ensureShareCode(ins.data.id);
     document.getElementById('ctShareOut').innerHTML = code
-      ? `Share this code: <b style="font-family:var(--mono);font-size:16px;letter-spacing:.08em;">${code}</b>`
+      ? `🔑 Share this code: <b style="font-family:var(--mono);font-size:16px;letter-spacing:.08em;">${code}</b>`
       : 'Could not generate a code — try again.';
     loadMyCustomSets();
   };
@@ -1647,6 +1872,79 @@ async function redeemShareCode(){
   startAttempt(row.id, row);
 }
 
+async function loadResultsTab(){
+  const myToken = navToken;
+  const body = document.getElementById('utabBody');
+  body.innerHTML = `<div class="card muted">Loading your results…</div>`;
+  const { data: attempts } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('status','submitted').order('submitted_at',{ascending:false});
+  if(myToken !== navToken) return;
+  if(!attempts || !attempts.length){
+    body.innerHTML = `<div class="card muted">No submitted attempts yet — once you complete any set, it'll show up here with your rank and percentile.</div>`;
+    return;
+  }
+
+  const setIds = [...new Set(attempts.map(a=>a.set_id))];
+  const { data: sets } = await sb.from('sets').select('*').in('id', setIds);
+  if(myToken !== navToken) return;
+  const setsById = {}; (sets||[]).forEach(s=> setsById[s.id]=s);
+
+  const qbankIds = [...new Set((sets||[]).map(s=>s.qbank_id).filter(Boolean))];
+  const folderIds = [...new Set((sets||[]).map(s=>s.folder_id).filter(Boolean))];
+  const [{ data: qbanks }, { data: folders }] = await Promise.all([
+    qbankIds.length ? sb.from('qbanks').select('id,name').in('id', qbankIds) : Promise.resolve({data:[]}),
+    folderIds.length ? sb.from('folders').select('id,name').in('id', folderIds) : Promise.resolve({data:[]}),
+  ]);
+  if(myToken !== navToken) return;
+  const qbanksById = {}; (qbanks||[]).forEach(q=> qbanksById[q.id]=q);
+  const foldersById = {}; (folders||[]).forEach(f=> foldersById[f.id]=f);
+
+  // Rank/percentile per attempted set — the same RPC used everywhere else
+  // in the app, keyed only on set_id + user_id, so it works identically for
+  // admin-created qbank sets and for any custom module, whether the user
+  // built it themselves or redeemed someone else's shared code for it.
+  const rankResults = await Promise.all(setIds.map(sid=>sb.rpc('set_rank_stats', { p_set_id: sid, p_user_id: S.profile.id })));
+  if(myToken !== navToken) return;
+  const rankBySet = {};
+  setIds.forEach((sid,i)=>{ const r = rankResults[i].data; rankBySet[sid] = Array.isArray(r)?r[0]:r; });
+
+  let html = `<div class="card"><h3>🏅 My Results</h3><p class="muted">Every set you've submitted — qbank sets, category decks, and custom modules (yours or shared with you) — with your latest rank and percentile.</p></div>`;
+  attempts.forEach(att=>{
+    const s = setsById[att.set_id];
+    if(!s) return;
+    const isCustom = s.set_type==='custom';
+    const isMine = s.user_id === S.profile.id;
+    const icon = isCustom ? '🧩' : '📘';
+    let title;
+    if(isCustom){
+      title = (s.subject || 'Custom set') + (isMine ? '' : ' (shared with you)');
+    } else {
+      const qb = qbanksById[s.qbank_id];
+      const fo = foldersById[s.folder_id];
+      title = [qb?.name, fo?leafNameOf(fo.name):null, s.subject, s.set_number?`Set ${s.set_number}`:null].filter(Boolean).join(' — ');
+    }
+    const totalQ = att.total_questions ?? (s.question_ids||[]).length;
+    const pct = totalQ ? Math.round((att.correct_count||0)/totalQ*1000)/10 : 0;
+    const rankRow = rankBySet[s.id];
+    const dateStr = att.submitted_at ? new Date(att.submitted_at).toLocaleDateString() : '';
+    html += `<div class="card result-card" style="margin-top:12px;">
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;">
+        <h3 style="margin:0;">${icon} ${escapeHtml(title)}</h3>
+        <span class="muted" style="font-size:12px;">📅 ${dateStr}</span>
+      </div>
+      <div class="row" style="align-items:center;gap:20px;flex-wrap:wrap;margin-top:10px;">
+        <div class="donut sm" style="--pct:${pct}"><span>${pct}%</span></div>
+        <div class="muted">✅ ${att.correct_count ?? 0}/${totalQ} correct · score ${att.score>0?'+':''}${att.score}</div>
+      </div>
+      ${rankBadgeHtml(rankRow)}
+      ${isCustom ? `<div class="row" style="margin-top:10px;"><button class="subtle iconbtn" data-fullrank="${s.id}">🏆 See everyone's rank list</button></div>` : ''}
+    </div>`;
+  });
+  if(myToken !== navToken) return;
+  body.innerHTML = html;
+  body.querySelectorAll('[data-fullrank]').forEach(b=>{
+    b.onclick = ()=> viewCustomRankList(b.dataset.fullrank);
+  });
+}
 async function loadSubTab(){
   const myToken = navToken;
   const body=document.getElementById('utabBody');
@@ -1676,7 +1974,7 @@ async function startAttempt(setId, presetSet){
   // long to open. Text loads instantly; each question's image is fetched
   // lazily (see ensureQuestionImage) only once you're actually viewing it.
   const { data: questions } = await sb.from('questions')
-    .select('id, q_text, options, correct_index, explanation, subject')
+    .select('id, q_text, options, correct_index, explanation, subject, is_controversial')
     .in('id', set.question_ids);
   const ordered = set.question_ids.map(id=>questions.find(q=>q.id===id)).filter(Boolean);
   if(!att){
@@ -1805,10 +2103,9 @@ async function submitAttempt(att, set, questions, auto){
   }
   await sb.from('attempts').update({answers:att.answers, status:'submitted', submitted_at:new Date().toISOString(), score, correct_count:correctCount, total_questions:qs.length}).eq('id', att.id);
   att.status='submitted'; att.score=score;
-  toast(auto? 'Time up — set auto-submitted' : 'Set submitted');
   S.exam = null;
   S.review = { att, set, questions, showExpl:false };
-  renderReviewChoice();
+  showCompletionAnim(auto ? 'Time up — set auto-submitted' : 'Set completed! 🎉', renderReviewChoice);
 }
 async function renderReviewChoice(){
   const { att, set, questions } = S.review;
@@ -1836,9 +2133,10 @@ async function renderReviewChoice(){
         <div class="donut" style="--pct:${pct}"><span>${pct}%</span></div>
         <div>
           <div style="font-size:16px;"><b>${att.correct_count ?? 0}/${totalQ}</b> correct</div>
-          <div class="muted" style="margin-top:2px;">${rankRow && rankRow.rank ? `Rank ${rankRow.rank}/${rankRow.total_attempts} · ${rankRow.percentile}ᵗʰ percentile — updates as more people attempt` : 'Not enough other attempts yet to rank against.'}</div>
+          <div class="muted" style="margin-top:2px;">Score: ${att.score>0?'+':''}${att.score}</div>
         </div>
       </div>
+      ${rankBadgeHtml(rankRow)}
       <div style="margin-top:24px;">
         <div class="muted" style="margin-bottom:4px;">Question difficulty — based on how everyone has done on these so far</div>
         <div class="diffbars">
@@ -1891,12 +2189,14 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
     <div class="reviewcard" id="revCapture">
       <div class="qmeta">Question ${i+1}</div>
       ${accBar}
+      ${q.is_controversial ? `<div class="controversial-banner">⚠️ <b>Marked controversial by admin</b> — the correct answer for this question is under review.</div>` : ''}
       <div style="font-weight:600;font-size:18.5px;line-height:1.55;">${q.image_url===undefined && q._imgFetching ? '<div class="muted" style="font-size:12px;margin-bottom:8px;">Loading image…</div>' : ''}${richBlock(q.q_text, q.image_url)}</div>
       <div id="revOpts"></div>
       ${withExpl?`<div class="divider"></div><div><b>Explanation</b>${renderRichText(q.explanation||'No explanation provided.')}</div>`:''}
     </div>
     ${withExpl?`<div class="row"><button class="subtle" id="ssWith">📸 Save screenshot (with explanation)</button><button class="subtle" id="ssWithout">📸 Save screenshot (without explanation)</button></div>`
       :`<div class="card"><div class="muted" style="margin-bottom:6px;">Why did this go wrong?</div><div class="catbtns" id="catbtns"></div></div>`}
+    <div class="row" style="margin-top:10px;"><button class="subtle iconbtn" id="raiseQueryBtn">🤔 Raise a query on this question</button></div>
     <div class="row" style="margin-top:14px;"><button class="ghost" id="pv" ${i===0?'disabled':''}>◀ Prev</button><button class="primary" id="nx" ${i===questions.length-1?'disabled':''}>Next ▶</button></div>
   </div>`;
   const optsEl=document.getElementById('revOpts');
@@ -1909,6 +2209,7 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
   document.getElementById('closeRev').onclick=()=>{ history.back(); };
   document.getElementById('pv').onclick=()=>renderReview(withExpl, i-1, wrongOnly);
   document.getElementById('nx').onclick=()=>renderReview(withExpl, i+1, wrongOnly);
+  document.getElementById('raiseQueryBtn').onclick=()=>openQueryModal(q, a);
   if(!withExpl){
     const cb=document.getElementById('catbtns');
     cb.innerHTML = CATS.map(c=>`<button class="${existingCat?.category===c.key?'primary':'subtle'}" data-c="${c.key}">${c.label}</button>`).join('');
@@ -1921,6 +2222,86 @@ async function renderReview(withExpl, i=0, wrongOnly=false){
     document.getElementById('ssWith').onclick=()=>captureShot(true);
     document.getElementById('ssWithout').onclick=()=>captureShot(false);
   }
+}
+// ================= QUESTION QUERIES (user doubts on review) =================
+// Lets a student flag that they think the marked answer is wrong right from
+// the review screen. Stored in the `question_queries` table (question_id,
+// user_id, user_selected_index, suggested_correct_index, query_text, status)
+// — admin reviews these from the Queries tab and can either accept the
+// suggested answer (updates the question's correct_index) or mark the
+// question controversial (shown to every student via is_controversial).
+async function openQueryModal(q, a){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `<div class="modal querymodal">
+    <div class="rankmodal-head querymodal-head">
+      <div class="rankmodal-icon querymodal-icon">🤔</div>
+      <div><h3 style="margin:0;">Raise a query</h3><div class="muted" style="font-size:12.5px;">Think this question's answer is wrong? Tell us why.</div></div>
+      <button class="modal-x" id="qmClose" title="Close">✕</button>
+    </div>
+    <div id="qmBody" class="muted">Loading…</div>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('qmClose').onclick = ()=> overlay.remove();
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.remove(); });
+
+  const body = document.getElementById('qmBody');
+  const { data: existing, error } = await sb.from('question_queries').select('*').eq('question_id', q.id).eq('user_id', S.profile.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
+
+  if(error){
+    body.innerHTML = `<p style="color:var(--red);">Couldn't load — ${error.message}. Make sure the question_queries table has been added in Supabase.</p>`;
+    return;
+  }
+  if(existing && existing.status==='pending'){
+    body.innerHTML = `<p>You've already raised a query on this question — it's <b>pending review</b> by the admin.</p>
+      <div class="card muted" style="margin-top:10px;">"${escapeHtml(existing.query_text||'')}"</div>`;
+    return;
+  }
+  if(existing && existing.status==='resolved'){
+    body.innerHTML = `<p>✅ Your earlier query on this question was <b>accepted</b> — the correct answer was updated.</p>`;
+    return;
+  }
+  if(existing && existing.status==='dismissed'){
+    body.innerHTML = `<p>Your earlier query on this question was reviewed by the admin and the answer was kept as-is.${existing.admin_note?`<br><span class="muted">Admin note: ${escapeHtml(existing.admin_note)}</span>`:''}</p>
+      <button class="subtle iconbtn" id="qmRaiseAgain" style="margin-top:10px;width:100%;">Raise a new query anyway</button>`;
+    document.getElementById('qmRaiseAgain').onclick = ()=> renderQueryForm(body, q, a);
+    return;
+  }
+  renderQueryForm(body, q, a);
+}
+function renderQueryForm(body, q, a){
+  body.innerHTML = `
+    <div class="muted" style="margin-bottom:8px;">What do you think is the correct answer?</div>
+    <div id="qmOpts"></div>
+    <label>Your query / reasoning</label>
+    <textarea id="qmText" rows="3" placeholder="Explain why you think the marked answer is wrong…"></textarea>
+    <button class="primary" id="qmSubmit" style="margin-top:14px;width:100%;">Submit query</button>
+    <div id="qmStatus" class="muted" style="margin-top:8px;"></div>`;
+  let picked = null;
+  const optsEl = document.getElementById('qmOpts');
+  optsEl.innerHTML = q.options.map((o,idx)=>`<div class="opt qm-opt" data-idx="${idx}">${renderRichText(o)}</div>`).join('');
+  optsEl.querySelectorAll('.qm-opt').forEach(el=>{
+    el.onclick = ()=>{
+      picked = +el.dataset.idx;
+      optsEl.querySelectorAll('.qm-opt').forEach(o=>o.classList.remove('qm-picked'));
+      el.classList.add('qm-picked');
+    };
+  });
+  document.getElementById('qmSubmit').onclick = async ()=>{
+    const st = document.getElementById('qmStatus');
+    if(picked==null){ st.textContent = 'Pick which answer you think is correct first.'; return; }
+    const text = document.getElementById('qmText').value.trim();
+    if(!text){ st.textContent = 'Add a short note about your doubt.'; return; }
+    st.textContent = 'Submitting…';
+    const { error } = await sb.from('question_queries').insert({
+      question_id: q.id, user_id: S.profile.id,
+      user_selected_index: (a && a.selected!=null) ? a.selected : null,
+      suggested_correct_index: picked,
+      query_text: text, status: 'pending'
+    });
+    if(error){ st.textContent = 'Could not submit — ' + error.message; return; }
+    body.innerHTML = `<p>✅ Query submitted — the admin will review it.</p>`;
+  };
 }
 async function captureShot(withExpl){
   const node=document.getElementById('revCapture');
@@ -1977,6 +2358,7 @@ async function renderAdmin(){
     <div class="tab ${S.atab==='users'?'on':''}" data-t="users">Users</div>
     <div class="tab ${S.atab==='plans'?'on':''}" data-t="plans">Plans</div>
     <div class="tab ${S.atab==='rankings'?'on':''}" data-t="rankings">Rankings</div>
+    <div class="tab ${S.atab==='queries'?'on':''}" data-t="queries">❓ Queries</div>
     <div class="tab ${S.atab==='attempt'?'on':''}" data-t="attempt">Practice (user view)</div>
   </div><div id="atabBody"></div>`;
   wrap.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ if(t.dataset.t===S.atab) return; goTo({atab:t.dataset.t}); });
@@ -1986,6 +2368,7 @@ async function renderAdmin(){
   if(S.atab==='users') return adminUsers();
   if(S.atab==='plans') return adminPlans();
   if(S.atab==='rankings') return adminRankings();
+  if(S.atab==='queries') return adminQueries();
   if(S.atab==='attempt'){ S.view='user'; S.nav={}; return renderUser(); }
 }
 
@@ -2922,6 +3305,82 @@ const EXAMTYPE_RANK_LABELS = {
   neetpg: 'NEET PG',
   updated_neetpg: 'Updated NEET PG',
 };
+// ================= QUESTION QUERIES (admin review) =================
+async function adminQueries(){
+  const body = document.getElementById('atabBody');
+  body.innerHTML = `<div class="card muted">Loading queries…</div>`;
+  const { data: queries, error } = await sb.from('question_queries').select('*').eq('status','pending').order('created_at',{ascending:true});
+  if(error){
+    body.innerHTML = `<div class="card"><h3>❓ Question Queries</h3><p class="muted" style="color:var(--red);">Couldn't load — ${error.message}. Make sure the question_queries table has been added in Supabase.</p></div>`;
+    return;
+  }
+  if(!queries || !queries.length){
+    body.innerHTML = `<div class="card"><h3>❓ Question Queries</h3><p class="muted">No pending queries — you're all caught up. 🎉</p></div>`;
+    return;
+  }
+  const qIds = [...new Set(queries.map(q=>q.question_id))];
+  const uIds = [...new Set(queries.map(q=>q.user_id))];
+  const [{ data: questions }, { data: users }] = await Promise.all([
+    sb.from('questions').select('id, q_text, options, correct_index, subject, is_controversial').in('id', qIds),
+    sb.from('profiles').select('id, name, email').in('id', uIds),
+  ]);
+  const qById = {}; (questions||[]).forEach(q=> qById[q.id]=q);
+  const uById = {}; (users||[]).forEach(u=> uById[u.id]=u);
+
+  body.innerHTML = `<div class="card"><h3>❓ Question Queries</h3><p class="muted">Students' doubts raised during review — accept their suggested answer, mark the question controversial, or dismiss.</p></div>` +
+    queries.map(qq=>{
+      const q = qById[qq.question_id];
+      const u = uById[qq.user_id];
+      if(!q) return '';
+      return `<div class="card querycard" style="margin-top:12px;" data-qid="${qq.id}">
+        <div class="muted" style="font-size:12px;">👤 ${escapeHtml(u?(u.name||u.email):'Unknown user')} · 📅 ${new Date(qq.created_at).toLocaleDateString()} ${q.is_controversial?'· <span style="color:var(--red);">⚠️ already marked controversial</span>':''}</div>
+        <div style="font-weight:600;margin:8px 0;">${renderRichText(q.q_text)}</div>
+        <div class="muted" style="font-size:13px;">Current correct answer: <b>${escapeHtml(q.options[q.correct_index]||'—')}</b></div>
+        <div class="muted" style="font-size:13px;margin-top:2px;">🎯 Student suggests: <b style="color:var(--cyan);">${escapeHtml(q.options[qq.suggested_correct_index]||'—')}</b></div>
+        <div class="card muted querynote" style="margin-top:8px;">"${escapeHtml(qq.query_text||'')}"</div>
+        <div class="row" style="margin-top:12px;flex-wrap:wrap;">
+          <button class="primary iconbtn" data-accept="${qq.id}">✅ Accept &amp; update answer</button>
+          <button class="danger iconbtn" data-controversial="${qq.id}">⚠️ Mark controversial</button>
+          <button class="ghost iconbtn" data-dismiss="${qq.id}">✖ Dismiss</button>
+        </div>
+      </div>`;
+    }).join('');
+
+  body.querySelectorAll('[data-accept]').forEach(b=>{
+    b.onclick = async ()=>{
+      const qq = queries.find(x=>x.id===b.dataset.accept);
+      if(!confirm('Update this question\'s correct answer to the student\'s suggestion?')) return;
+      b.disabled = true;
+      const { error: e1 } = await sb.from('questions').update({ correct_index: qq.suggested_correct_index }).eq('id', qq.question_id);
+      const { error: e2 } = await sb.from('question_queries').update({ status:'resolved', resolved_at: new Date().toISOString() }).eq('id', qq.id);
+      if(e1 || e2){ toast('Failed: '+(e1?.message||e2?.message)); b.disabled=false; return; }
+      toast('Answer updated');
+      adminQueries();
+    };
+  });
+  body.querySelectorAll('[data-controversial]').forEach(b=>{
+    b.onclick = async ()=>{
+      const qq = queries.find(x=>x.id===b.dataset.controversial);
+      b.disabled = true;
+      const { error: e1 } = await sb.from('questions').update({ is_controversial:true }).eq('id', qq.question_id);
+      const { error: e2 } = await sb.from('question_queries').update({ status:'resolved', resolved_at: new Date().toISOString(), admin_note:'Marked controversial' }).eq('id', qq.id);
+      if(e1 || e2){ toast('Failed: '+(e1?.message||e2?.message)); b.disabled=false; return; }
+      toast('Question marked controversial');
+      adminQueries();
+    };
+  });
+  body.querySelectorAll('[data-dismiss]').forEach(b=>{
+    b.onclick = async ()=>{
+      const qq = queries.find(x=>x.id===b.dataset.dismiss);
+      const note = prompt('Optional note for the student (why dismissed):','') || null;
+      b.disabled = true;
+      const { error: e1 } = await sb.from('question_queries').update({ status:'dismissed', resolved_at: new Date().toISOString(), admin_note: note }).eq('id', qq.id);
+      if(e1){ toast('Failed: '+e1.message); b.disabled=false; return; }
+      toast('Dismissed');
+      adminQueries();
+    };
+  });
+}
 async function adminRankings(){
   const body=document.getElementById('atabBody');
   const { data: qbanks } = await sb.from('qbanks').select('*').order('created_at',{ascending:false});
@@ -2933,6 +3392,16 @@ async function adminRankings(){
     <select id="rkQb">${(qbanks||[]).map(qb=>`<option value="${qb.id}" ${qb.id===S.rankQb?'selected':''}>${qb.name}</option>`).join('')}</select>
     <div id="rkFolderWrap" style="margin-top:10px;"></div>
     <div id="rkSetsWrap" style="margin-top:10px;"></div>
+  </div>
+  <div class="card">
+    <h3>Custom sets (student-built)</h3>
+    <p class="muted">Look up a student's self-built sets by their email, or jump straight to one with its share code.</p>
+    <div class="row">
+      <input id="csSearch" placeholder="student email or share code" style="flex:1;">
+      <button class="subtle" id="csFindBtn">Find</button>
+    </div>
+    <div id="csStatus" class="muted" style="margin-top:8px;"></div>
+    <div id="csResults" style="margin-top:10px;"></div>
   </div>
   <div class="card">
     <h3>Exam-pattern totals (across every qbank)</h3>
@@ -2947,6 +3416,8 @@ async function adminRankings(){
   </div>
   <div id="rankResult"></div>`;
   document.getElementById('rkQb').onchange = (e)=>{ S.rankQb = e.target.value; renderRankFolders(); };
+  document.getElementById('csFindBtn').onclick = findCustomSets;
+  document.getElementById('csSearch').addEventListener('keydown', (e)=>{ if(e.key==='Enter') findCustomSets(); });
   document.querySelectorAll('[data-examtype]').forEach(b=>b.onclick=()=>{
     loadRankList('examtype', { p_exam_type: b.dataset.examtype }, `${EXAMTYPE_RANK_LABELS[b.dataset.examtype]} — overall total`);
   });
@@ -2993,12 +3464,58 @@ async function renderRankSets(){
   const ft = wrap.querySelector('[data-foldertotal]');
   if(ft) ft.onclick = ()=> loadRankList('folder', { p_folder_id: folder.id }, `${folder.name} — section total`);
 }
+async function findCustomSets(){
+  const raw = document.getElementById('csSearch').value.trim();
+  const status = document.getElementById('csStatus');
+  const results = document.getElementById('csResults');
+  results.innerHTML = '';
+  if(!raw){ status.textContent = 'Type an email or a share code first.'; return; }
+  status.textContent = 'Searching…';
+
+  // Share codes are 6 characters and never contain '@'; treat anything
+  // shaped like that as a code lookup, everything else as an email search.
+  if(!raw.includes('@') && raw.length <= 8){
+    const { data: set } = await sb.from('sets').select('*').eq('share_code', raw.toUpperCase()).eq('set_type','custom').maybeSingle();
+    if(!set){ status.textContent = 'No custom set found with that code.'; return; }
+    const { data: owner } = await sb.from('profiles').select('id,name,email').eq('id', set.user_id).maybeSingle();
+    status.textContent = '';
+    renderCustomSetResults([set], owner ? {[owner.id]: owner} : {});
+    return;
+  }
+
+  const { data: users } = await sb.from('profiles').select('id,name,email').ilike('email', `%${raw}%`);
+  if(!users || !users.length){ status.textContent = 'No student found with that email.'; return; }
+  const { data: sets } = await sb.from('sets').select('*').in('user_id', users.map(u=>u.id)).eq('set_type','custom').order('created_at',{ascending:false});
+  status.textContent = '';
+  if(!sets || !sets.length){ results.innerHTML = '<p class="muted">This student hasn\'t built any custom sets yet.</p>'; return; }
+  const byId = {}; users.forEach(u=> byId[u.id]=u);
+  renderCustomSetResults(sets, byId);
+}
+function renderCustomSetResults(sets, ownerById){
+  const results = document.getElementById('csResults');
+  results.innerHTML = sets.map(s=>{
+    const owner = ownerById[s.user_id];
+    const n = (s.question_ids||[]).length;
+    return `<div class="qrow" data-cs="${s.id}">
+      <div><b>${escapeHtml(s.subject||'Custom set')}</b> · ${n} q ${owner?`· ${escapeHtml(owner.name||owner.email)}`:''} ${s.share_code?`· code <span style="font-family:var(--mono);">${s.share_code}</span>`:''}</div>
+      <button class="subtle" data-rank="${s.id}">Rank list</button>
+    </div>`;
+  }).join('');
+  results.querySelectorAll('[data-rank]').forEach(b=>{
+    b.onclick = ()=>{
+      const s = sets.find(x=>x.id===b.dataset.rank);
+      const owner = ownerById[s.user_id];
+      loadRankList('customset', { p_set_id: s.id, p_user_id: S.profile.id }, `${s.subject||'Custom set'}${owner?' — built by '+(owner.name||owner.email):''}`);
+    };
+  });
+}
 async function loadRankList(scope, params, title){
   const result = document.getElementById('rankResult');
   result.innerHTML = `<div class="card muted">Loading…</div>`;
   const rpcName = {
     set:'admin_set_rank_list', subject:'admin_subject_rank_list',
-    folder:'admin_folder_rank_list', examtype:'admin_examtype_rank_list', overall:'admin_overall_rank_list'
+    folder:'admin_folder_rank_list', examtype:'admin_examtype_rank_list', overall:'admin_overall_rank_list',
+    customset:'set_rank_list_public'
   }[scope];
   const { data, error } = await sb.rpc(rpcName, params);
   if(error){
