@@ -163,7 +163,7 @@ label{font-size:12.5px;color:var(--text-dim);display:block;margin:11px 0 5px;tex
 .csel-opt.sel{background:linear-gradient(135deg, var(--amber-dim), color-mix(in srgb, var(--amber-dim) 55%, transparent));}
 .csel-radio{width:20px;height:20px;flex:0 0 20px;border-radius:50%;border:2px solid color-mix(in srgb, var(--amber) 45%, var(--border));background:color-mix(in srgb, var(--amber) 10%, transparent);position:relative;transition:border-color .15s, background .15s, box-shadow .15s;}
 .csel-opt.sel .csel-radio{border-color:var(--amber);background:radial-gradient(circle at 35% 30%, var(--amber-2), var(--amber) 72%);box-shadow:0 0 12px -1px rgba(239,165,62,.6);}
-.csel-label{font-weight:700;font-size:14.5px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.csel-label{font-weight:700;font-size:14.5px;color:var(--text);flex:1;white-space:normal;line-height:1.36;word-break:break-word;}
 .csel-opt.sel .csel-label{color:var(--amber-2);}
 .overlay{position:fixed;inset:0;background:rgba(7,11,20,.82);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;animation:fadeIn .2s ease both;}
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
@@ -177,6 +177,11 @@ label{font-size:12.5px;color:var(--text-dim);display:block;margin:11px 0 5px;tex
 .custom-set-row{transition:border-color .15s, box-shadow .15s;}
 .custom-set-row:hover{border-color:var(--amber);box-shadow:0 4px 16px -6px rgba(239,165,62,.35);}
 .codechip{font-family:var(--mono);background:var(--amber-dim);color:var(--amber-2);padding:2px 8px;border-radius:7px;font-weight:700;letter-spacing:.04em;}
+.chipselect{display:flex;flex-wrap:wrap;gap:8px;max-height:220px;overflow-y:auto;padding:2px;}
+.chip{background:color-mix(in srgb, var(--surface-2) 90%, transparent);border:1.5px solid var(--border);border-radius:20px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text-dim);cursor:pointer;transition:border-color .15s, background .15s, color .15s, transform .1s;white-space:nowrap;}
+.chip:hover{border-color:var(--amber);color:var(--text);}
+.chip:active{transform:scale(.96);}
+.chip.chip-on{border-color:var(--amber);background:linear-gradient(135deg, var(--amber-dim), color-mix(in srgb, var(--amber-dim) 55%, transparent));color:var(--amber-2);box-shadow:0 0 0 1px rgba(239,165,62,.18);}
 .result-card{transition:border-color .15s, box-shadow .15s;}
 .result-card:hover{border-color:color-mix(in srgb, var(--amber) 45%, var(--border));}
 .controversial-banner{background:linear-gradient(135deg, color-mix(in srgb, var(--red) 16%, transparent), color-mix(in srgb, var(--surface-2) 70%, transparent));border:1.5px solid var(--red);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-bottom:12px;}
@@ -1596,16 +1601,19 @@ async function startCategoryDeck(folderId, category){
 // and their own mistake-category tags), and share it with a short code that
 // only other active users can redeem. See generateSetsForFolder's chunking
 // for where the "leftover chunk gets 0.9 min/question" rule is mirrored here.
-let ctState = { platform: '__all__', source: 'all', difficulty: 'all', category: 'all' };
+let ctState = { platform: '__all__', folders: [], sections: [], difficulty: 'all', category: 'all', numQuestions: 50, duration: 45 };
+let ctFoldersCache = null; // { forPlatform, list } — avoids refetching folders on every chip toggle
+async function getCtFolders(qbankId){
+  if(ctFoldersCache && ctFoldersCache.forPlatform===qbankId) return ctFoldersCache.list;
+  const list = await fetchAllRows(()=> qbankId==='__all__'
+    ? sb.from('folders').select('id, name, exam_type, qbank_id')
+    : sb.from('folders').select('id, name, exam_type, qbank_id').eq('qbank_id', qbankId));
+  ctFoldersCache = { forPlatform: qbankId, list: list||[] };
+  return ctFoldersCache.list;
+}
 function ctOptionSets(qbanks){
   return {
     platform: [{value:'__all__',label:'🌐 All platforms'}, ...qbanks.map(q=>({value:q.id,label:q.name}))],
-    source: [
-      {value:'all',label:'🗂️ All (subject-wise + PYQ + GT + everything)'},
-      {value:'subjectwise',label:'📘 Subject-wise / topic-wise'},
-      {value:'pyq',label:'📝 PYQ'},
-      {value:'gt',label:'🏆 GT'},
-    ],
     difficulty: [
       {value:'all',label:'⚪ All'},
       {value:'hard',label:'🔴 Hard — most people got it wrong'},
@@ -1619,28 +1627,73 @@ function ctOptionSets(qbanks){
     ],
   };
 }
-function renderBuildCard(qbanks){
+// Chip-style multi-select (folders / sections). selectedList is the actual
+// ctState array — mutated in place so callers don't need to re-sync it.
+function renderChipMultiSelect(id, options, selectedList){
+  if(!options.length) return `<p class="muted" style="font-size:13px;">Nothing to pick here yet.</p>`;
+  return `<div class="chipselect" id="${id}">
+    ${options.map(o=>`<button type="button" class="chip ${selectedList.includes(o.value)?'chip-on':''}" data-v="${escapeHtml(String(o.value))}">${escapeHtml(o.label)}</button>`).join('')}
+  </div>`;
+}
+function wireChipMultiSelect(id, selectedList, onChange){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.querySelectorAll('.chip').forEach(ch=>{
+    ch.onclick = ()=>{
+      const v = ch.dataset.v;
+      const idx = selectedList.indexOf(v);
+      if(idx>=0) selectedList.splice(idx,1); else selectedList.push(v);
+      onChange && onChange();
+    };
+  });
+}
+async function renderBuildCard(qbanks){
   const card = document.getElementById('ctBuildCard');
   if(!card) return;
+  const folders = await getCtFolders(ctState.platform);
+  if(!document.getElementById('ctBuildCard')) return; // navigated away while fetching
+
+  const groupNames = [...new Set(folders.map(f=>folderGroupOf(f.name)))].sort((a,b)=>a.localeCompare(b));
+  // Prune stale selections left over from a previous platform/folder pick.
+  ctState.folders = ctState.folders.filter(g=>groupNames.includes(g));
+  const sectionCandidates = ctState.folders.length ? folders.filter(f=>ctState.folders.includes(folderGroupOf(f.name))) : folders;
+  ctState.sections = ctState.sections.filter(id=>sectionCandidates.some(f=>f.id===id));
+
   const opts = ctOptionSets(qbanks);
   card.innerHTML = `
     <h3>🧩 Build your own set</h3>
-    <p class="muted">Pulls from whichever platform/section combo you pick below, filtered the way you want. Every regenerate with the same options gives you fresh questions — never a repeat of a set you already made this way.</p>
+    <p class="muted">Pick a platform, narrow down by folder/section if you want (leave unpicked for everything), then choose how many questions and how long. Every regenerate gives you fresh questions — never a repeat of a set you already made this way.</p>
     <label>Platform</label>
     ${renderCselHtml('ctPlatformSel', opts.platform, ctState.platform)}
-    <label>Question source</label>
-    ${renderCselHtml('ctSourceSel', opts.source, ctState.source)}
-    <label>Difficulty (based on how everyone else has scored on it)</label>
+
+    <label style="margin-top:14px;">Folders${ctState.folders.length?` <span class="muted" style="font-weight:400;">(${ctState.folders.length} picked)</span>`:''}</label>
+    <p class="muted" style="font-size:12px;margin:-4px 0 8px;">Tap to select — leave all unpicked to include every folder. Multiple allowed.</p>
+    ${renderChipMultiSelect('ctFolderChips', groupNames.map(g=>({value:g,label:g})), ctState.folders)}
+
+    <label style="margin-top:16px;">Sections${ctState.sections.length?` <span class="muted" style="font-weight:400;">(${ctState.sections.length} picked)</span>`:''}</label>
+    <p class="muted" style="font-size:12px;margin:-4px 0 8px;">Narrow further to specific sections inside the folders above. Multiple allowed.</p>
+    ${renderChipMultiSelect('ctSectionChips', sectionCandidates.map(f=>({value:f.id,label:leafNameOf(f.name)})), ctState.sections)}
+
+    <label style="margin-top:16px;">Difficulty (based on how everyone else has scored on it)</label>
     ${renderCselHtml('ctDifficultySel', opts.difficulty, ctState.difficulty)}
     <label>Your mistake-category tags</label>
     ${renderCselHtml('ctCategorySel', opts.category, ctState.category)}
-    <button class="primary" id="ctBuild" style="margin-top:18px;">✨ Create my set (50 q / 45 min)</button>
+
+    <div class="row" style="gap:12px;margin-top:16px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:140px;"><label>Number of questions</label><input type="number" id="ctNumQ" min="1" max="500" value="${ctState.numQuestions}"></div>
+      <div style="flex:1;min-width:140px;"><label>Duration (minutes)</label><input type="number" id="ctDuration" min="1" max="600" value="${ctState.duration}"></div>
+    </div>
+
+    <button class="primary" id="ctBuild" style="margin-top:18px;">✨ Create my set</button>
     <div id="ctStatus" class="muted" style="margin-top:10px; white-space:pre-line;"></div>
     <div id="ctResult" style="margin-top:12px;"></div>`;
-  wireCsel('ctPlatformSel', opts.platform, ctState.platform, v=>{ ctState.platform=v; renderBuildCard(qbanks); });
-  wireCsel('ctSourceSel', opts.source, ctState.source, v=>{ ctState.source=v; renderBuildCard(qbanks); });
+  wireCsel('ctPlatformSel', opts.platform, ctState.platform, v=>{ ctState.platform=v; ctState.folders=[]; ctState.sections=[]; renderBuildCard(qbanks); });
+  wireChipMultiSelect('ctFolderChips', ctState.folders, ()=>renderBuildCard(qbanks));
+  wireChipMultiSelect('ctSectionChips', ctState.sections, ()=>renderBuildCard(qbanks));
   wireCsel('ctDifficultySel', opts.difficulty, ctState.difficulty, v=>{ ctState.difficulty=v; renderBuildCard(qbanks); });
   wireCsel('ctCategorySel', opts.category, ctState.category, v=>{ ctState.category=v; renderBuildCard(qbanks); });
+  document.getElementById('ctNumQ').onchange = (e)=>{ ctState.numQuestions = Math.max(1, parseInt(e.target.value)||50); };
+  document.getElementById('ctDuration').onchange = (e)=>{ ctState.duration = Math.max(1, parseFloat(e.target.value)||45); };
   document.getElementById('ctBuild').onclick = ()=>buildCustomSet(qbanks);
 }
 async function loadCustomTab(isActive){
@@ -1746,19 +1799,17 @@ async function buildCustomSet(qbanks){
   resultEl.innerHTML = '';
   st.textContent = 'Building your set…';
   const qbankId = ctState.platform;
-  const source = ctState.source;
   const difficulty = ctState.difficulty;
   const category = ctState.category;
+  const numQuestions = Math.max(1, ctState.numQuestions||50);
+  const duration = Math.max(1, ctState.duration || Math.round(numQuestions*0.9*10)/10);
 
-  const folders = await fetchAllRows(()=> qbankId==='__all__'
-    ? sb.from('folders').select('id, name, exam_type, qbank_id')
-    : sb.from('folders').select('id, name, exam_type, qbank_id').eq('qbank_id', qbankId));
+  const folders = await getCtFolders(qbankId);
   if(!folders || !folders.length){ st.textContent = 'No sections in this platform yet.'; return; }
 
-  let targetFolders;
-  if(source==='all') targetFolders = folders;
-  else if(source==='subjectwise') targetFolders = folders.filter(f=>f.exam_type==='subjectwise');
-  else targetFolders = folders.filter(f=> folderGroupOf(f.name).toLowerCase().startsWith(source));
+  let targetFolders = folders;
+  if(ctState.folders.length) targetFolders = targetFolders.filter(f=> ctState.folders.includes(folderGroupOf(f.name)));
+  if(ctState.sections.length) targetFolders = targetFolders.filter(f=> ctState.sections.includes(f.id));
   if(!targetFolders.length){ alert('No questions available for this combination.'); st.textContent=''; return; }
 
   const qRows = await fetchAllRows(()=>sb.from('questions').select('id').in('folder_id', targetFolders.map(f=>f.id)));
@@ -1782,7 +1833,7 @@ async function buildCustomSet(qbanks){
   // same combination of filters (tracked via custom_filter_key on our own
   // past 'custom' sets — see the Supabase notes for why this needs no extra
   // tracking table).
-  const filterKey = `${qbankId}|${source}|${difficulty}|${category}`;
+  const filterKey = `${qbankId}|${ctState.folders.slice().sort().join(',')}|${ctState.sections.slice().sort().join(',')}|${difficulty}|${category}`;
   const { data: pastSets } = await sb.from('sets').select('question_ids').eq('user_id', S.profile.id).eq('set_type','custom').eq('custom_filter_key', filterKey);
   const usedBefore = new Set();
   (pastSets||[]).forEach(s=> (s.question_ids||[]).forEach(id=>usedBefore.add(id)));
@@ -1808,17 +1859,18 @@ async function buildCustomSet(qbanks){
   }
   if(!candidateIds.length){ alert('No questions available for this combination.'); st.textContent=''; return; }
 
-  // Shuffle and take up to 50; fewer than 50 just means a shorter set at the
-  // same 0.9 min/question rate the folder auto-split already uses.
+  // Shuffle and take however many the user asked for; fewer available just
+  // means a shorter set.
   for(let i=candidateIds.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [candidateIds[i],candidateIds[j]]=[candidateIds[j],candidateIds[i]]; }
-  const picked = candidateIds.slice(0, 50);
-  const duration = picked.length===50 ? 45 : Math.round(picked.length*0.9*10)/10;
+  const picked = candidateIds.slice(0, numQuestions);
 
-  const sourceLabel = {all:'All', subjectwise:'Subject-wise', pyq:'PYQ', gt:'GT'}[source];
+  const folderLabel = ctState.sections.length ? `${ctState.sections.length} section${ctState.sections.length>1?'s':''}`
+    : ctState.folders.length ? ctState.folders.join(', ')
+    : 'All folders';
   const diffLabel = {all:'All', hard:'Hard', medium:'Medium', easy:'Easy'}[difficulty];
   const catLabel = category==='all' ? 'All' : category==='none' ? 'None' : CATS.find(c=>c.key===category)?.label;
   const platformLabel = qbankId==='__all__' ? 'All platforms' : (qbanks.find(q=>q.id===qbankId)?.name || 'Platform');
-  const label = `Custom: ${platformLabel} · ${sourceLabel} · ${diffLabel} · ${catLabel}`;
+  const label = `Custom: ${platformLabel} · ${folderLabel} · ${diffLabel} · ${catLabel}`;
 
   const ins = await sb.from('sets').insert({
     qbank_id: qbankId==='__all__' ? null : qbankId, folder_id: null, user_id: S.profile.id, set_type:'custom',
@@ -1827,7 +1879,7 @@ async function buildCustomSet(qbanks){
   }).select().maybeSingle();
   if(ins.error){ st.textContent = 'Could not create set: ' + ins.error.message; return; }
 
-  st.textContent = '';
+  st.textContent = picked.length < numQuestions ? `Only ${picked.length} matching questions were available (you asked for ${numQuestions}).` : '';
   resultEl.innerHTML = `<div class="qrow custom-set-row" style="cursor:default;">
     <div>✅ <b>${picked.length} questions</b> · ⏱️ ${duration} min</div>
     <div class="row"><button class="primary iconbtn" id="ctStart">▶ Start now</button><button class="subtle iconbtn" id="ctShare">🔗 Get share code</button></div>
@@ -2938,6 +2990,19 @@ async function generateSetsForFolder(folder){
 }
 
 // ---------- Manage tab: move sections between qbanks, and hand-edit any generated set ----------
+// Populates the "Inside folder" dropdown on the section-creation card with
+// every existing top-level folder group in the currently picked qbank, so
+// an admin can nest a new section inside e.g. "Subject-wise" or "GT"
+// instead of only ever creating flat top-level sections.
+async function renderCsParentOptions(){
+  const sel = document.getElementById('csParentPick');
+  if(!sel) return;
+  const qbId = document.getElementById('csQbPick').value;
+  sel.innerHTML = `<option value="">— none, top-level section —</option>`;
+  const folders = await fetchAllRows(()=>sb.from('folders').select('name').eq('qbank_id', qbId));
+  const groups = [...new Set((folders||[]).map(f=>folderGroupOf(f.name)))].sort((a,b)=>a.localeCompare(b));
+  groups.forEach(g=> sel.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`));
+}
 async function adminManage(){
   const body=document.getElementById('atabBody');
   const { data: qbanks } = await sb.from('qbanks').select('*').order('name');
@@ -2955,11 +3020,13 @@ async function adminManage(){
   </div>
   <div class="card">
     <h3>Create a new section inside a qbank</h3>
-    <p class="muted">A blank section (folder) inside an existing qbank — e.g. a new "GT 4" inside BTR. Move existing sets into it below, or upload fresh questions targeting it.</p>
+    <p class="muted">A blank section (folder) inside an existing qbank — e.g. a new "GT 4" inside BTR, or nested inside an existing folder like "Subject-wise". Move existing sets into it below, or upload fresh questions targeting it.</p>
     <label>Inside qbank</label>
     <select id="csQbPick">${qbanks.map(qb=>`<option value="${qb.id}" ${qb.id===S.mgQbSel?'selected':''}>${qb.name}</option>`).join('')}</select>
+    <label>Inside folder (optional)</label>
+    <select id="csParentPick"><option value="">— none, top-level section —</option></select>
     <div class="row" style="margin-top:8px;">
-      <input id="csFolderName" placeholder="e.g. Grand Tests - GT 4" style="flex:1;">
+      <input id="csFolderName" placeholder="e.g. GT 4" style="flex:1;">
       <button class="primary" id="csCreateBtn" style="white-space:nowrap;">Create section</button>
     </div>
     <div id="csStatus" class="muted" style="margin-top:6px;"></div>
@@ -3019,11 +3086,15 @@ async function adminManage(){
     const st = document.getElementById('csStatus');
     const name = document.getElementById('csFolderName').value.trim();
     const qbId = document.getElementById('csQbPick').value;
+    const parent = document.getElementById('csParentPick').value;
     if(!name){ st.textContent = 'Enter a section name.'; return; }
-    const { data, error } = await sb.from('folders').insert({qbank_id:qbId, name}).select().maybeSingle();
+    const fullName = parent ? `${parent} - ${name}` : name;
+    const { data, error } = await sb.from('folders').insert({qbank_id:qbId, name: fullName}).select().maybeSingle();
     st.textContent = error ? ('Failed: '+error.message) : `Created "${data.name}" ✓ — now find it under "Move specific sets" or the Sections tab.`;
     if(!error) document.getElementById('csFolderName').value = '';
   };
+  document.getElementById('csQbPick').onchange = renderCsParentOptions;
+  await renderCsParentOptions();
   await renderMoveFolderList();
 
   document.getElementById('msQbPick').onchange = ()=>{ S.msQbSel = document.getElementById('msQbPick').value; S.msSourceFolder=null; renderMsFolders(); };
