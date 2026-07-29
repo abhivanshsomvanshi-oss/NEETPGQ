@@ -182,6 +182,14 @@ label{font-size:12.5px;color:var(--text-dim);display:block;margin:11px 0 5px;tex
 .rankmodal-head h3{font-family:var(--display);}
 .modal-x{position:absolute;top:14px;right:14px;width:32px;height:32px;min-height:auto;padding:0;border-radius:50%;background:color-mix(in srgb, var(--surface) 60%, transparent);border:1px solid var(--border);color:var(--text-dim);font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:none;}
 .modal-x:hover{color:var(--red);border-color:var(--red);}
+.modal.usermodal{max-width:600px;}
+.idcallout{background:linear-gradient(135deg, color-mix(in srgb, var(--amber-dim) 55%, transparent), color-mix(in srgb, var(--surface-2) 45%, transparent));border:1.5px solid var(--amber);border-radius:14px;padding:14px 16px;margin:12px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.idcallout b{font-size:16px;}
+.userrow{display:flex;align-items:center;gap:12px;padding:12px 8px;border-bottom:1px solid var(--border-soft);cursor:pointer;border-radius:10px;transition:background .15s;}
+.userrow:hover{background:color-mix(in srgb, var(--surface-2) 60%, transparent);}
+.userrow img,.userrow .avplaceholder{width:36px;height:36px;border-radius:50%;object-fit:cover;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;}
+.quotabar{height:8px;border-radius:6px;background:var(--surface-3);overflow:hidden;margin:6px 0;}
+.quotabar>div{height:100%;background:linear-gradient(90deg,var(--amber),var(--amber-2));}
 .custom-set-row{transition:border-color .15s, box-shadow .15s;}
 .custom-set-row:hover{border-color:var(--amber);box-shadow:0 4px 16px -6px rgba(239,165,62,.35);}
 .codechip{font-family:var(--mono);background:var(--amber-dim);color:var(--amber-2);padding:2px 8px;border-radius:7px;font-weight:700;letter-spacing:.04em;}
@@ -2026,30 +2034,76 @@ function upiPayLink(plan){
   const note = encodeURIComponent(`${plan.name} plan - ${S.profile.email||''}`);
   return `upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(UPI_PAYEE_NAME)}&am=${plan.price}&cu=INR&tn=${note}`;
 }
+function myDiscountPct(){
+  // Milestone discount (promoter) takes priority over the flat referee discount.
+  if(S.profile.promoter_milestone_available && S.profile.promoter_milestone_discount_pct) return +S.profile.promoter_milestone_discount_pct;
+  if(S.profile.referred_by_coupon) return 1;
+  return 0;
+}
+function discountedPrice(price){
+  const pct = myDiscountPct();
+  return pct ? Math.round(price*(1-pct/100)) : price;
+}
 async function loadSubTab(){
   const myToken = navToken;
   const body=document.getElementById('utabBody');
   body.innerHTML = '';
   const { data: plans } = await sb.from('plans').select('*').order('display_order');
   if(myToken !== navToken) return;
+  const pct = myDiscountPct();
   let html = `<div class="card"><h3>Your account</h3>
     <p>Status: <span class="badge ${S.profile.status}">${S.profile.status}</span></p>
     <p class="muted">${S.profile.subscription_expiry ? 'Valid until '+new Date(S.profile.subscription_expiry).toLocaleDateString() : 'No active period'}</p>
     <p class="muted">Devices allowed: ${S.profile.device_limit}</p>
-  </div><div class="grid">`;
+  </div>`;
+
+  html += `<div class="card"><h3>🎟️ Have a referral code?</h3>`;
+  if(S.profile.referred_by_coupon){
+    html += `<p class="muted">✅ Referral code applied — you get 1% off.</p>`;
+  } else {
+    html += `<div class="row" style="gap:8px;">
+      <input id="refCodeInput" placeholder="Enter referral code" style="flex:1;text-transform:uppercase;">
+      <button class="primary" id="refCodeApply" style="min-width:110px;">Apply</button>
+    </div><div id="refCodeStatus" class="muted" style="margin-top:6px;"></div>`;
+  }
+  if(S.profile.promoter_milestone_available){
+    html += `<p class="muted" style="margin-top:8px;">🎉 Your referral code hit its target — <b>${S.profile.promoter_milestone_discount_pct}% off</b> your next plan below.</p>`;
+  }
+  html += `</div><div class="grid">`;
+
   (plans||[]).forEach(p=>{
-    html += `<div class="card"><h3>${p.name}</h3><div class="stat-big">₹${p.price}</div><div class="muted">${p.duration_days} days</div>
-      <a href="${upiPayLink(p)}"><button class="primary" style="width:100%;margin-top:12px;">Pay ₹${p.price} via UPI</button></a>
+    const finalPrice = discountedPrice(p.price);
+    html += `<div class="card"><h3>${p.name}</h3>
+      <div class="stat-big">${pct?`<span style="text-decoration:line-through;font-size:16px;color:var(--text-dim);">₹${p.price}</span> `:''}₹${finalPrice}</div>
+      ${pct?`<div class="muted" style="font-size:12px;">${pct}% off applied</div>`:''}
+      <div class="muted">${p.duration_days} days</div>
+      <a href="${upiPayLink({...p, price:finalPrice})}"><button class="primary" style="width:100%;margin-top:12px;">Pay ₹${finalPrice} via UPI</button></a>
       <button class="subtle" data-showform="${p.id}" style="width:100%;margin-top:8px;">I've paid — notify admin</button>
       <div id="payForm-${p.id}" style="display:none;margin-top:10px;">
         <label>UPI transaction ID / UTR number (from your payment app)</label>
         <input id="utr-${p.id}" placeholder="e.g. 4123xxxxxxxx">
         <p class="muted" style="font-size:11.5px;margin:4px 0 0;">This is the reference number your UPI app shows after a successful payment — the admin matches it against the bank statement to confirm the payment is yours.</p>
-        <button class="primary" data-submit="${p.id}" data-amt="${p.price}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" style="width:100%;margin-top:8px;">Submit for verification</button>
+        <button class="primary" data-submit="${p.id}" data-amt="${finalPrice}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" style="width:100%;margin-top:8px;">Submit for verification</button>
       </div></div>`;
   });
   html += `</div><div class="card"><p class="muted">UPI ID: <b>${UPI_ID}</b>. After paying, tap "I've paid" on your plan above, enter the UPI transaction ID/UTR from your payment app, and submit — the admin will match it and activate your account.</p></div>`;
   body.innerHTML += html;
+
+  const refBtn = document.getElementById('refCodeApply');
+  if(refBtn) refBtn.onclick = async ()=>{
+    const status = document.getElementById('refCodeStatus');
+    const code = document.getElementById('refCodeInput').value.trim().toUpperCase();
+    if(!code){ status.textContent = 'Enter a code first.'; return; }
+    refBtn.disabled = true; status.textContent = 'Checking…';
+    const { data, error } = await sb.rpc('redeem_coupon', { p_code: code, p_user_id: S.profile.id });
+    refBtn.disabled = false;
+    const row = Array.isArray(data) ? data[0] : data;
+    if(error || !row || row.discount_pct==null){ status.textContent = row?.message || error?.message || 'Invalid code.'; return; }
+    S.profile.referred_by_coupon = true;
+    toast('Referral code applied — 1% off!');
+    loadSubTab();
+  };
+
   body.querySelectorAll('[data-showform]').forEach(btn=>{
     btn.onclick = ()=>{
       document.getElementById(`payForm-${btn.dataset.showform}`).style.display = 'block';
@@ -2538,6 +2592,7 @@ async function renderAdmin(){
     <div class="tab ${S.atab==='users'?'on':''}" data-t="users">Users</div>
     <div class="tab ${S.atab==='plans'?'on':''}" data-t="plans">Plans</div>
     <div class="tab ${S.atab==='payments'?'on':''}" data-t="payments">💳 Payments</div>
+    <div class="tab ${S.atab==='coupons'?'on':''}" data-t="coupons">🎟️ Coupons</div>
     <div class="tab ${S.atab==='feedback'?'on':''}" data-t="feedback">💬 Feedback</div>
     <div class="tab ${S.atab==='rankings'?'on':''}" data-t="rankings">Rankings</div>
     <div class="tab ${S.atab==='queries'?'on':''}" data-t="queries">❓ Queries</div>
@@ -2550,6 +2605,7 @@ async function renderAdmin(){
   if(S.atab==='users') return adminUsers();
   if(S.atab==='plans') return adminPlans();
   if(S.atab==='payments') return adminPayments();
+  if(S.atab==='coupons') return adminCoupons();
   if(S.atab==='feedback') return adminFeedback();
   if(S.atab==='rankings') return adminRankings();
   if(S.atab==='queries') return adminQueries();
@@ -3489,63 +3545,168 @@ async function renderSetEditor(){
 
 async function adminUsers(){
   const body=document.getElementById('atabBody');
+  body.innerHTML = `<div class="card muted">Loading users…</div>`;
   const { data: users } = await sb.from('profiles').select('*').neq('role','admin').order('created_at',{ascending:false});
+  const { data: pendingPays } = await sb.from('payments').select('user_id').eq('status','pending');
+  const pendingByUser = {}; (pendingPays||[]).forEach(p=> pendingByUser[p.user_id] = (pendingByUser[p.user_id]||0)+1);
   body.innerHTML = `<div class="card"><h3>Users</h3>
-  <div class="muted" style="margin-bottom:8px;">Name / batch / college show up on every rank list under the Rankings tab.</div>
-  <div style="overflow-x:auto;"><table id="usersTbl"><tr><th></th><th>Email</th><th>Name</th><th>Batch</th><th>College</th><th>Status</th><th>Expiry</th><th>Devices</th><th></th></tr>
-  ${(users||[]).map(u=>`<tr data-u="${u.id}">
-    <td>${u.avatar_url?`<img src="${u.avatar_url}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;">`:''}</td>
-    <td>${u.email}</td>
-    <td><input class="nameInput" value="${(u.name||'').replace(/"/g,'&quot;')}" placeholder="Full name" style="width:130px;"></td>
-    <td><input class="batchInput" value="${(u.batch||'').replace(/"/g,'&quot;')}" placeholder="e.g. 2024" style="width:90px;"></td>
-    <td><input class="collegeInput" value="${(u.college||'').replace(/"/g,'&quot;')}" placeholder="College" style="width:140px;"></td>
-    <td><span class="badge ${u.status}">${u.status}</span></td>
-    <td><input type="date" class="expInput" value="${u.subscription_expiry?u.subscription_expiry.slice(0,10):''}" style="width:140px;"></td>
-    <td><input type="number" min="1" class="devInput" value="${u.device_limit}" style="width:60px;"></td>
-    <td class="row" style="gap:6px;">
-      <button class="primary saveBtn" style="padding:6px 10px;font-size:12px;">Save</button>
-      <button class="${u.status==='active'?'danger':'subtle'} toggleBtn" style="padding:6px 10px;font-size:12px;">${u.status==='active'?'Revoke':'Activate'}</button>
-      ${u.college_id_path?`<button class="ghost idBtn" style="padding:6px 10px;font-size:12px;">ID</button>`:''}
-      <button class="danger deleteBtn" style="padding:6px 10px;font-size:12px;">Delete</button>
-    </td></tr>`).join('')}
-  </table></div></div>`;
-  body.querySelectorAll('tr[data-u]').forEach(tr=>{
-    const uid=tr.dataset.u;
-    tr.querySelector('.saveBtn').onclick=async ()=>{
-      const exp=tr.querySelector('.expInput').value;
-      const dev=+tr.querySelector('.devInput').value||1;
-      const name=tr.querySelector('.nameInput').value.trim();
-      const batch=tr.querySelector('.batchInput').value.trim();
-      const college=tr.querySelector('.collegeInput').value.trim();
-      const { error } = await sb.from('profiles').update({
-        subscription_expiry: exp? new Date(exp).toISOString():null,
-        device_limit:dev, name, batch, college
-      }).eq('id', uid);
-      if(error){ toast('Save failed — '+error.message); return; }
-      toast('Saved');
-    };
-    tr.querySelector('.toggleBtn').onclick=async ()=>{
-      const cur = tr.querySelector('.badge').textContent;
-      const next = cur==='active' ? 'revoked' : 'active';
-      await sb.from('profiles').update({status:next}).eq('id', uid);
-      if(next==='revoked'){ await sb.from('devices').delete().eq('user_id', uid); }
+  <div class="muted" style="margin-bottom:8px;">Click a user to open their full profile, verify payments and manage access — all in one place.</div>
+  <input id="userSearch" placeholder="Filter by name, email or college…" style="margin-bottom:10px;">
+  <div id="userList"></div></div>`;
+  const listEl = document.getElementById('userList');
+  function renderList(filter){
+    const f = (filter||'').toLowerCase();
+    const filtered = (users||[]).filter(u=> !f || (u.name||'').toLowerCase().includes(f) || (u.email||'').toLowerCase().includes(f) || (u.college||'').toLowerCase().includes(f));
+    if(!filtered.length){ listEl.innerHTML = '<p class="muted">No matching users.</p>'; return; }
+    listEl.innerHTML = filtered.map(u=>`<div class="userrow" data-u="${u.id}">
+      ${u.avatar_url?`<img src="${u.avatar_url}">`:`<div class="avplaceholder">${(u.name||u.email||'?').charAt(0).toUpperCase()}</div>`}
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;">${escapeHtml(u.name||'(no name)')} ${pendingByUser[u.id]?`<span class="badge pending" style="margin-left:6px;">${pendingByUser[u.id]} payment${pendingByUser[u.id]>1?'s':''} pending</span>`:''}</div>
+        <div class="muted" style="font-size:12.5px;">${escapeHtml(u.email)} ${u.college?'· '+escapeHtml(u.college):''}</div>
+      </div>
+      <span class="badge ${u.status}">${u.status}</span>
+    </div>`).join('');
+    listEl.querySelectorAll('.userrow').forEach(row=>{
+      row.onclick = ()=> openUserModal(row.dataset.u);
+    });
+  }
+  renderList('');
+  document.getElementById('userSearch').oninput = (e)=> renderList(e.target.value);
+}
+
+// ================= UNIFIED USER MODAL (profile + College ID + payments + actions) =================
+async function openUserModal(uid){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `<div class="modal usermodal">
+    <button class="modal-x" id="umClose" title="Close">✕</button>
+    <div id="umBody" class="muted">Loading…</div>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('umClose').onclick = ()=> overlay.remove();
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.remove(); });
+  await renderUserModalBody(uid, overlay);
+}
+async function renderUserModalBody(uid, overlay){
+  const body = overlay.querySelector('#umBody');
+  const [{ data: u, error }, { data: payments }, { data: promoCoupon }] = await Promise.all([
+    sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
+    sb.from('payments').select('*').eq('user_id', uid).order('created_at',{ascending:false}),
+    sb.from('coupons').select('*').eq('promoter_id', uid).order('created_at',{ascending:false})
+  ]);
+  if(error || !u){ body.innerHTML = `<p style="color:var(--red);">Couldn't load this user — ${error?.message||'not found'}.</p>`; return; }
+  body.innerHTML = `
+    <div class="row" style="align-items:center;gap:14px;">
+      ${u.avatar_url?`<img src="${u.avatar_url}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;">`:`<div class="avplaceholder" style="width:52px;height:52px;font-size:20px;">${(u.name||u.email||'?').charAt(0).toUpperCase()}</div>`}
+      <div><h3 style="margin:0;">${escapeHtml(u.name||'(no name)')}</h3><div class="muted">${escapeHtml(u.email)}</div></div>
+      <span class="badge ${u.status}" style="margin-left:auto;">${u.status}</span>
+    </div>
+
+    <div class="idcallout">
+      <div><div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;">College ID — verify before activating</div>
+      <b>${escapeHtml(u.college||'College not set')}</b></div>
+      ${u.college_id_path?`<button class="primary" id="umViewId" style="padding:8px 14px;font-size:13px;">🪪 View College ID</button>`:`<span class="muted">No ID uploaded</span>`}
+    </div>
+
+    <label>Full name</label><input id="umName" value="${(u.name||'').replace(/"/g,'&quot;')}">
+    <div class="row" style="gap:10px;">
+      <div style="flex:1;"><label>Batch</label><input id="umBatch" value="${(u.batch||'').replace(/"/g,'&quot;')}"></div>
+      <div style="flex:1;"><label>College</label><input id="umCollege" value="${(u.college||'').replace(/"/g,'&quot;')}"></div>
+    </div>
+    <div class="row" style="gap:10px;">
+      <div style="flex:1;"><label>Subscription expiry</label><input type="date" id="umExpiry" value="${u.subscription_expiry?u.subscription_expiry.slice(0,10):''}"></div>
+      <div style="flex:1;"><label>Device limit</label><input type="number" min="1" id="umDevices" value="${u.device_limit}"></div>
+    </div>
+    <button class="subtle" id="umSaveDetails" style="width:100%;margin-top:6px;">Save details</button>
+
+    ${(promoCoupon&&promoCoupon.length)?`<div class="divider"></div><h3 style="font-size:15px;">🎟️ Referral coupon</h3>
+      ${promoCoupon.map(c=>`<div class="muted" style="font-size:13px;margin-bottom:4px;">Code <b style="font-family:var(--mono);color:var(--text);">${c.code}</b> — ${c.usage_count}/${c.target_quota} used
+        <div class="quotabar"><div style="width:${Math.min(100,Math.round(c.usage_count/c.target_quota*100))}%;"></div></div>
+        ${c.milestone_reached?`<span class="badge active">Milestone unlocked — ${c.milestone_discount_pct}% off</span>`:''}</div>`).join('')}` : ''}
+    ${u.promoter_milestone_available?`<div class="idcallout" style="border-color:var(--green);"><div><b>🎉 ${u.promoter_milestone_discount_pct}% milestone discount</b> ready for this user's next transaction.</div></div>`:''}
+
+    <div class="divider"></div>
+    <h3 style="font-size:15px;">💳 Payment history</h3>
+    ${(!payments||!payments.length)?'<p class="muted">No payments submitted yet.</p>':`<div style="overflow-x:auto;"><table><tr><th>Date</th><th>Plan</th><th>Amount</th><th>UTR</th><th>Status</th><th></th></tr>
+      ${payments.map(p=>`<tr data-p="${p.id}" data-plan="${p.plan_id||''}">
+        <td>${p.created_at?new Date(p.created_at).toLocaleDateString():''}</td>
+        <td>${escapeHtml(p.plan_name||'')}</td>
+        <td>₹${p.amount}</td>
+        <td style="font-family:var(--mono);font-size:12px;">${escapeHtml(p.utr_ref||'—')}</td>
+        <td><span class="badge ${p.status}">${p.status}</span></td>
+        <td class="row" style="gap:6px;">
+          ${p.status!=='verified'?`<button class="primary umVerify" style="padding:5px 9px;font-size:11.5px;">Verify & Activate</button>`:''}
+          ${p.status==='pending'?`<button class="danger umReject" style="padding:5px 9px;font-size:11.5px;">Reject</button>`:''}
+        </td></tr>`).join('')}
+      </table></div>`}
+
+    <div class="divider"></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;">
+      <button class="${u.status==='active'?'danger':'primary'}" id="umToggle" style="flex:1;">${u.status==='active'?'🔒 Revoke access':'✅ Activate account'}</button>
+      <button class="danger" id="umDelete" style="flex:1;">🗑️ Permanently delete</button>
+    </div>`;
+
+  const idBtn = document.getElementById('umViewId');
+  if(idBtn) idBtn.onclick = async ()=>{
+    const { data, error } = await sb.storage.from('college-ids').createSignedUrl(u.college_id_path, 300);
+    if(error || !data){ toast('Could not open ID — '+(error?.message||'')); return; }
+    window.open(data.signedUrl, '_blank');
+  };
+  document.getElementById('umSaveDetails').onclick = async ()=>{
+    const name = document.getElementById('umName').value.trim();
+    const batch = document.getElementById('umBatch').value.trim();
+    const college = document.getElementById('umCollege').value.trim();
+    const exp = document.getElementById('umExpiry').value;
+    const dev = +document.getElementById('umDevices').value || 1;
+    const { error: saveErr } = await sb.from('profiles').update({
+      name, batch, college, device_limit: dev,
+      subscription_expiry: exp ? new Date(exp).toISOString() : null
+    }).eq('id', uid);
+    if(saveErr){ toast('Save failed — '+saveErr.message); return; }
+    toast('Saved');
+  };
+  document.getElementById('umToggle').onclick = async ()=>{
+    const next = u.status==='active' ? 'revoked' : 'active';
+    const { error: togErr } = await sb.from('profiles').update({status:next}).eq('id', uid);
+    if(togErr){ toast('Failed — '+togErr.message); return; }
+    if(next==='revoked'){ await sb.from('devices').delete().eq('user_id', uid); }
+    toast(next==='active'?'Account activated':'Access revoked');
+    renderUserModalBody(uid, overlay);
+    adminUsers();
+  };
+  document.getElementById('umDelete').onclick = async ()=>{
+    if(!confirm(`Permanently delete ${u.name||u.email}? This removes their profile, devices, sets and rank history — this can't be undone.`)) return;
+    await sb.from('devices').delete().eq('user_id', uid);
+    const { error: delErr } = await sb.from('profiles').delete().eq('id', uid);
+    if(delErr){ toast('Delete failed — '+delErr.message); return; }
+    toast('User deleted');
+    overlay.remove();
+    adminUsers();
+  };
+  body.querySelectorAll('tr[data-p]').forEach(tr=>{
+    const pid = tr.dataset.p, planId = tr.dataset.plan;
+    const vBtn = tr.querySelector('.umVerify');
+    if(vBtn) vBtn.onclick = async ()=>{
+      vBtn.disabled = true;
+      let expiry = null;
+      if(planId){
+        const { data: plan } = await sb.from('plans').select('duration_days').eq('id', planId).maybeSingle();
+        if(plan) expiry = new Date(Date.now() + plan.duration_days*24*60*60*1000).toISOString();
+      }
+      const { error: pErr } = await sb.from('payments').update({status:'verified'}).eq('id', pid);
+      const updateFields = {status:'active'};
+      if(expiry) updateFields.subscription_expiry = expiry;
+      if(u.promoter_milestone_available) updateFields.promoter_milestone_available = false;
+      const { error: uErr } = await sb.from('profiles').update(updateFields).eq('id', uid);
+      if(pErr || uErr){ toast('Failed — '+(pErr?.message||uErr?.message)); vBtn.disabled=false; return; }
+      toast('Payment verified & user activated');
+      renderUserModalBody(uid, overlay);
       adminUsers();
     };
-    const idBtn = tr.querySelector('.idBtn');
-    if(idBtn) idBtn.onclick = async ()=>{
-      const u = (users||[]).find(x=>x.id===uid);
-      const { data, error } = await sb.storage.from('college-ids').createSignedUrl(u.college_id_path, 300);
-      if(error || !data){ toast('Could not open ID — '+(error?.message||'')); return; }
-      window.open(data.signedUrl, '_blank');
-    };
-    tr.querySelector('.deleteBtn').onclick = async ()=>{
-      const u = (users||[]).find(x=>x.id===uid);
-      if(!confirm(`Delete ${u?.name||u?.email||'this user'}? This removes their profile, devices, sets and rank history — this can't be undone.`)) return;
-      await sb.from('devices').delete().eq('user_id', uid);
-      const { error } = await sb.from('profiles').delete().eq('id', uid);
-      if(error){ toast('Delete failed — '+error.message); return; }
-      toast('User deleted');
-      adminUsers();
+    const rBtn = tr.querySelector('.umReject');
+    if(rBtn) rBtn.onclick = async ()=>{
+      await sb.from('payments').update({status:'rejected'}).eq('id', pid);
+      renderUserModalBody(uid, overlay);
     };
   });
 }
@@ -3634,6 +3795,96 @@ async function adminPayments(){
       adminPayments();
     };
   });
+}
+
+// ================= ADMIN COUPONS (referral / milestone system) =================
+function genCouponCode(promoterName){
+  const base = (promoterName||'REF').replace(/[^a-zA-Z]/g,'').slice(0,4).toUpperCase() || 'REF';
+  const rand = Math.random().toString(36).slice(2,6).toUpperCase();
+  return `${base}${rand}`;
+}
+async function adminCoupons(){
+  const body=document.getElementById('atabBody');
+  body.innerHTML = `<div class="card muted">Loading coupons…</div>`;
+  const { data: coupons, error } = await sb.from('coupons').select('*').order('created_at',{ascending:false});
+  if(error){
+    body.innerHTML = `<div class="card"><h3>🎟️ Referral Coupons</h3><p class="muted" style="color:var(--red);">Couldn't load — ${error.message}. Make sure the coupons table has been added in Supabase (see migration).</p></div>`;
+    return;
+  }
+  const promoterIds = [...new Set((coupons||[]).map(c=>c.promoter_id))];
+  const { data: promoters } = promoterIds.length ? await sb.from('profiles').select('id,name,email').in('id', promoterIds) : {data:[]};
+  const byId = {}; (promoters||[]).forEach(p=>byId[p.id]=p);
+  body.innerHTML = `<div class="card">
+    <h3>🎟️ Referral & milestone coupons</h3>
+    <div class="muted" style="margin-bottom:8px;">Referees get a flat 1% off when they use a code. Once a code hits its quota, the promoter unlocks their own milestone discount.</div>
+    ${(!coupons||!coupons.length)?'<p class="muted">No coupons created yet.</p>':`<div style="overflow-x:auto;"><table><tr><th>Code</th><th>Promoter</th><th>Quota</th><th>Milestone %</th><th>Status</th></tr>
+    ${coupons.map(c=>{
+      const promo = byId[c.promoter_id];
+      const pct = Math.min(100, Math.round((c.usage_count/c.target_quota)*100));
+      return `<tr><td style="font-family:var(--mono);font-weight:700;">${c.code}</td>
+        <td>${promo?escapeHtml(promo.name||promo.email):'—'}</td>
+        <td>${c.usage_count}/${c.target_quota}<div class="quotabar" style="width:90px;"><div style="width:${pct}%;"></div></div></td>
+        <td>${c.milestone_discount_pct}%</td>
+        <td>${c.milestone_reached?'<span class="badge active">Unlocked</span>':'<span class="badge pending">In progress</span>'}</td></tr>`;
+    }).join('')}</table></div>`}
+    <div class="divider"></div>
+    <h3 style="font-size:16px;">Create new coupon</h3>
+    <label>Promoter (search by name or email)</label>
+    <input id="cpSearch" placeholder="Type to search a user…">
+    <div id="cpResults" class="muted" style="margin-top:4px;"></div>
+    <div id="cpSelected" class="muted" style="margin:8px 0;"></div>
+    <div class="row" style="gap:10px;">
+      <div style="flex:1;"><label>Target quota (# of joins)</label><input id="cpQuota" type="number" min="1" value="10"></div>
+      <div style="flex:1;"><label>Milestone discount (%)</label><input id="cpMilestone" type="number" min="1" max="100" value="20"></div>
+    </div>
+    <button class="primary" id="cpCreate" style="margin-top:12px;width:100%;">Generate coupon code</button>
+    <div id="cpStatus" class="muted" style="margin-top:6px;"></div>
+  </div>`;
+
+  let selectedUser = null;
+  let searchTimer = null;
+  document.getElementById('cpSearch').oninput = (e)=>{
+    clearTimeout(searchTimer);
+    const term = e.target.value.trim();
+    const resWrap = document.getElementById('cpResults');
+    if(term.length<2){ resWrap.innerHTML=''; return; }
+    searchTimer = setTimeout(async ()=>{
+      const { data: found } = await sb.from('profiles').select('id,name,email').neq('role','admin').or(`name.ilike.%${term}%,email.ilike.%${term}%`).limit(8);
+      if(!found || !found.length){ resWrap.innerHTML = '<p class="muted">No users found.</p>'; return; }
+      resWrap.innerHTML = found.map(u=>`<div class="row" style="justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border-soft);">
+        <span style="font-size:13px;">${escapeHtml(u.name||u.email)} <span class="muted">${escapeHtml(u.email)}</span></span>
+        <button class="subtle cpPick" data-id="${u.id}" data-name="${(u.name||u.email).replace(/"/g,'&quot;')}" style="padding:5px 10px;font-size:12px;">Select</button>
+      </div>`).join('');
+      resWrap.querySelectorAll('.cpPick').forEach(b=>{
+        b.onclick = ()=>{
+          selectedUser = { id: b.dataset.id, name: b.dataset.name };
+          document.getElementById('cpSelected').innerHTML = `Promoter: <b style="color:var(--text);">${escapeHtml(selectedUser.name)}</b>`;
+          resWrap.innerHTML = '';
+          document.getElementById('cpSearch').value = selectedUser.name;
+        };
+      });
+    }, 300);
+  };
+  document.getElementById('cpCreate').onclick = async ()=>{
+    const status = document.getElementById('cpStatus');
+    if(!selectedUser){ status.textContent = 'Pick a promoter first.'; return; }
+    const quota = +document.getElementById('cpQuota').value || 10;
+    const milestone = +document.getElementById('cpMilestone').value || 20;
+    status.textContent = 'Generating…';
+    let attempts = 0, inserted = null, lastErr = null;
+    while(attempts < 5 && !inserted){
+      const code = genCouponCode(selectedUser.name);
+      const { data, error: insErr } = await sb.from('coupons').insert({
+        code, promoter_id: selectedUser.id, target_quota: quota, milestone_discount_pct: milestone
+      }).select().maybeSingle();
+      if(!insErr){ inserted = data; break; }
+      lastErr = insErr; attempts++;
+    }
+    if(!inserted){ status.textContent = 'Failed — '+(lastErr?.message||'could not generate a unique code'); return; }
+    status.textContent = `Created code ${inserted.code} ✓`;
+    toast(`Coupon ${inserted.code} created`);
+    adminCoupons();
+  };
 }
 
 // ================= ADMIN FEEDBACK =================
