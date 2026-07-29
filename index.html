@@ -292,7 +292,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = 'https://vjqhgxjnzjxqvralcvqq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqcWhneGpuemp4cXZyYWxjdnFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NjQ1NjQsImV4cCI6MjA5OTM0MDU2NH0.KnYldvE-fH9Rbc5Px3tZ6BjQLhcMDI-Vmg6QX9XPILk';
 const ADMIN_EMAIL = 'goluvansh@qbank.com';
-const TELEGRAM_BOT = 'https://t.me/Missionneetpg_bot';
 const UPI_ID = '9145891969@ptyes';
 const UPI_PAYEE_NAME = 'NeetPG QBank';
 
@@ -993,13 +992,13 @@ async function renderUser(){
     <div class="tab ${S.utab==='custom'?'on':''}" data-t="custom">Custom test</div>
     <div class="tab ${S.utab==='results'?'on':''}" data-t="results">My Results</div>
     <div class="tab ${S.utab==='sub'?'on':''}" data-t="sub">Subscription</div>
+    <div class="tab ${S.utab==='feedback'?'on':''}" data-t="feedback">💬 Feedback</div>
   </div><div id="utabBody"><div class="muted" style="padding:20px 0;">Loading…</div></div>`;
   wrap.querySelectorAll('.tab[data-t]').forEach(t=>t.onclick=()=>{ if(t.dataset.t===S.utab) return; goTo({utab:t.dataset.t, nav:{}}); });
 
   if(!isActive){
     document.getElementById('utabBody').innerHTML = `<div class="locked-banner"><h3>🔒 Subscription ${S.profile.status==='pending'?'pending activation':'inactive'}</h3>
-      <p class="muted">Buy a gift card of the plan you want and send it to the bot below. Admin will activate your access.</p>
-      <div class="row" style="margin-top:10px;"><a href="${TELEGRAM_BOT}"><button class="primary">Send screenshot on Telegram</button></a></div></div>`;
+      <p class="muted">Pay via UPI under the Subscription tab and submit your transaction ID — the admin will verify and activate your access.</p></div>`;
   }
 
   if(S.utab==='qbanks') return loadQbanksNav(isActive);
@@ -1008,6 +1007,7 @@ async function renderUser(){
   if(S.utab==='custom') return loadCustomTab(isActive);
   if(S.utab==='results') return loadResultsTab();
   if(S.utab==='sub') return loadSubTab();
+  if(S.utab==='feedback') return loadFeedbackTab();
 }
 
 // ---- QBank -> Category -> Folder -> Sets navigation ----
@@ -2079,7 +2079,72 @@ async function loadSubTab(){
   });
 }
 
-// ================= EXAM PLAYER =================
+// ================= FEEDBACK (user side) =================
+async function loadFeedbackTab(){
+  const myToken = navToken;
+  const body=document.getElementById('utabBody');
+  body.innerHTML = `<div class="card muted">Loading…</div>`;
+  const { data: qbanks } = await sb.from('qbanks').select('id,name').order('name');
+  const { data: mine, error } = await sb.from('app_feedback').select('*').eq('user_id', S.profile.id).order('created_at',{ascending:false});
+  if(myToken !== navToken) return;
+  if(error){
+    body.innerHTML = `<div class="card"><h3>💬 Feedback</h3><p class="muted" style="color:var(--red);">Couldn't load — ${error.message}. Make sure the app_feedback table has been added in Supabase.</p></div>`;
+    return;
+  }
+  const qbById = {}; (qbanks||[]).forEach(q=>qbById[q.id]=q.name);
+  let html = `<div class="card">
+    <h3>Raise an issue or give feedback</h3>
+    <label>What's this about?</label>
+    <select id="fbType">
+      <option value="issue">Something's wrong in a specific qbank/section</option>
+      <option value="general">General feedback / app improvement idea</option>
+    </select>
+    <div id="fbQbWrap">
+      <label>Which qbank? (optional — pick the section it's about)</label>
+      <select id="fbQb"><option value="">— not sure / not qbank-specific —</option>${(qbanks||[]).map(q=>`<option value="${q.id}">${escapeHtml(q.name)}</option>`).join('')}</select>
+    </div>
+    <label>Your message</label>
+    <textarea id="fbText" rows="4" placeholder="Describe the issue, or tell us what you'd like to see improved…"></textarea>
+    <button class="primary" id="fbSubmit" style="margin-top:12px;width:100%;">Submit</button>
+    <div id="fbStatus" class="muted" style="margin-top:8px;"></div>
+  </div>`;
+
+  html += `<h3 style="margin:18px 4px 8px;">Your past feedback</h3>`;
+  if(!mine || !mine.length){
+    html += `<div class="card muted">Nothing submitted yet.</div>`;
+  } else {
+    mine.forEach(f=>{
+      html += `<div class="card">
+        <div class="row" style="justify-content:space-between;flex-wrap:wrap;">
+          <div class="muted" style="font-size:12px;">${f.qbank_id&&qbById[f.qbank_id]?'📚 '+escapeHtml(qbById[f.qbank_id]):(f.category==='issue'?'⚠️ Issue':'💡 Suggestion')} · ${f.created_at?new Date(f.created_at).toLocaleDateString():''}</div>
+          <span class="badge ${f.status==='resolved'?'active':f.status==='in_progress'?'pending':'unset'}">${f.status.replace('_',' ')}</span>
+        </div>
+        <p style="margin:10px 0 0;">${escapeHtml(f.message)}</p>
+        ${f.admin_reply?`<div class="card muted" style="margin-top:10px;background:var(--surface-2);"><b>Admin:</b> ${escapeHtml(f.admin_reply)}</div>`:''}
+      </div>`;
+    });
+  }
+  body.innerHTML = html;
+
+  const syncQbWrap = ()=>{ document.getElementById('fbQbWrap').style.display = document.getElementById('fbType').value==='issue' ? 'block' : 'none'; };
+  document.getElementById('fbType').onchange = syncQbWrap;
+  syncQbWrap();
+
+  document.getElementById('fbSubmit').onclick = async ()=>{
+    const st = document.getElementById('fbStatus');
+    const category = document.getElementById('fbType').value;
+    const qbankId = document.getElementById('fbQb').value || null;
+    const message = document.getElementById('fbText').value.trim();
+    if(!message){ st.textContent = 'Write a message first.'; return; }
+    st.textContent = 'Submitting…';
+    const { error } = await sb.from('app_feedback').insert({
+      user_id: S.profile.id, qbank_id: qbankId, category, message, status: 'pending'
+    });
+    if(error){ st.textContent = 'Could not submit — ' + error.message; return; }
+    toast("Submitted — we've got it and it'll be looked into shortly.");
+    loadFeedbackTab();
+  };
+}
 async function startAttempt(setId, presetSet){
   const set = presetSet || (await sb.from('sets').select('*').eq('id', setId).maybeSingle()).data;
   let { data: att } = await sb.from('attempts').select('*').eq('user_id', S.profile.id).eq('set_id', setId).eq('status','in_progress').maybeSingle();
@@ -2473,6 +2538,7 @@ async function renderAdmin(){
     <div class="tab ${S.atab==='users'?'on':''}" data-t="users">Users</div>
     <div class="tab ${S.atab==='plans'?'on':''}" data-t="plans">Plans</div>
     <div class="tab ${S.atab==='payments'?'on':''}" data-t="payments">💳 Payments</div>
+    <div class="tab ${S.atab==='feedback'?'on':''}" data-t="feedback">💬 Feedback</div>
     <div class="tab ${S.atab==='rankings'?'on':''}" data-t="rankings">Rankings</div>
     <div class="tab ${S.atab==='queries'?'on':''}" data-t="queries">❓ Queries</div>
     <div class="tab ${S.atab==='attempt'?'on':''}" data-t="attempt">Practice (user view)</div>
@@ -2484,6 +2550,7 @@ async function renderAdmin(){
   if(S.atab==='users') return adminUsers();
   if(S.atab==='plans') return adminPlans();
   if(S.atab==='payments') return adminPayments();
+  if(S.atab==='feedback') return adminFeedback();
   if(S.atab==='rankings') return adminRankings();
   if(S.atab==='queries') return adminQueries();
   if(S.atab==='attempt'){ S.view='user'; S.nav={}; return renderUser(); }
@@ -3565,6 +3632,78 @@ async function adminPayments(){
     if(rejectBtn) rejectBtn.onclick = async ()=>{
       await sb.from('payments').update({status:'rejected'}).eq('id', pid);
       adminPayments();
+    };
+  });
+}
+
+// ================= ADMIN FEEDBACK =================
+const FEEDBACK_CANNED_REPLY = "Thanks for flagging this — we've noted it and it'll be resolved shortly!";
+async function adminFeedback(){
+  const body=document.getElementById('atabBody');
+  body.innerHTML = `<div class="card muted">Loading feedback…</div>`;
+  const { data: items, error } = await sb.from('app_feedback').select('*').order('created_at',{ascending:false});
+  if(error){
+    body.innerHTML = `<div class="card"><h3>💬 Feedback</h3><p class="muted" style="color:var(--red);">Couldn't load — ${error.message}. Make sure the app_feedback table has been added in Supabase.</p></div>`;
+    return;
+  }
+  if(!items || !items.length){
+    body.innerHTML = `<div class="card"><h3>💬 Feedback</h3><p class="muted">Nothing submitted yet.</p></div>`;
+    return;
+  }
+  const userIds = [...new Set(items.map(i=>i.user_id))];
+  const qbIds = [...new Set(items.map(i=>i.qbank_id).filter(Boolean))];
+  const [{data: users}, {data: qbanks}] = await Promise.all([
+    sb.from('profiles').select('id,name,email').in('id', userIds),
+    qbIds.length ? sb.from('qbanks').select('id,name').in('id', qbIds) : Promise.resolve({data:[]})
+  ]);
+  const userById = {}; (users||[]).forEach(u=>userById[u.id]=u);
+  const qbById = {}; (qbanks||[]).forEach(q=>qbById[q.id]=q.name);
+
+  body.innerHTML = `<div class="card"><h3>💬 Feedback</h3><p class="muted">Issues raised on a specific qbank, plus general suggestions.</p></div>` +
+    items.map(f=>{
+      const u = userById[f.user_id];
+      const qbName = f.qbank_id ? (qbById[f.qbank_id]||'(deleted qbank)') : null;
+      return `<div class="card" data-fb="${f.id}" data-qb="${f.qbank_id||''}">
+        <div class="row" style="justify-content:space-between;flex-wrap:wrap;">
+          <div>
+            <b>${u?escapeHtml(u.name||u.email):'—'}</b>
+            <span class="muted" style="font-size:12px;"> · ${f.category==='issue'?'⚠️ Issue':'💡 Suggestion'}${qbName?' · 📚 '+escapeHtml(qbName):''} · ${f.created_at?new Date(f.created_at).toLocaleString():''}</span>
+          </div>
+          <span class="badge ${f.status==='resolved'?'active':f.status==='in_progress'?'pending':'unset'}">${f.status.replace('_',' ')}</span>
+        </div>
+        <p style="margin:10px 0;">${escapeHtml(f.message)}</p>
+        ${f.admin_reply?`<div class="card muted" style="background:var(--surface-2);margin-bottom:10px;"><b>Your reply:</b> ${escapeHtml(f.admin_reply)}</div>`:''}
+        <label>Reply to student</label>
+        <textarea class="fbReplyInput" rows="2" placeholder="${FEEDBACK_CANNED_REPLY}">${f.admin_reply?escapeHtml(f.admin_reply):''}</textarea>
+        <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap;">
+          ${f.qbank_id?`<button class="ghost fixBtn" style="padding:8px 12px;font-size:12.5px;">🛠️ Go fix this qbank</button>`:''}
+          <button class="primary sendReplyBtn" style="padding:8px 12px;font-size:12.5px;">Send reply & mark in progress</button>
+          ${f.status!=='resolved'?`<button class="subtle resolveBtn" style="padding:8px 12px;font-size:12.5px;">Mark resolved</button>`:''}
+        </div>
+      </div>`;
+    }).join('');
+
+  body.querySelectorAll('[data-fb]').forEach(card=>{
+    const fid = card.dataset.fb;
+    const qbId = card.dataset.qb;
+    const fixBtn = card.querySelector('.fixBtn');
+    if(fixBtn) fixBtn.onclick = ()=>{
+      S.adminQbSel = qbId; S.mgQbSel = qbId;
+      goTo({atab:'folders'});
+    };
+    card.querySelector('.sendReplyBtn').onclick = async ()=>{
+      const textarea = card.querySelector('.fbReplyInput');
+      const reply = textarea.value.trim() || FEEDBACK_CANNED_REPLY;
+      const { error: e2 } = await sb.from('app_feedback').update({ admin_reply: reply, status: 'in_progress' }).eq('id', fid);
+      if(e2){ toast('Failed — '+e2.message); return; }
+      toast('Reply sent');
+      adminFeedback();
+    };
+    const resolveBtn = card.querySelector('.resolveBtn');
+    if(resolveBtn) resolveBtn.onclick = async ()=>{
+      const { error: e2 } = await sb.from('app_feedback').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', fid);
+      if(e2){ toast('Failed — '+e2.message); return; }
+      adminFeedback();
     };
   });
 }
