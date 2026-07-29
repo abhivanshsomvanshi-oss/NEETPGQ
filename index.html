@@ -185,6 +185,9 @@ label{font-size:12.5px;color:var(--text-dim);display:block;margin:11px 0 5px;tex
 .modal.usermodal{max-width:600px;}
 .idcallout{background:linear-gradient(135deg, color-mix(in srgb, var(--amber-dim) 55%, transparent), color-mix(in srgb, var(--surface-2) 45%, transparent));border:1.5px solid var(--amber);border-radius:14px;padding:14px 16px;margin:12px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .idcallout b{font-size:16px;}
+.idcallout.utrcallout{border-color:var(--cyan);background:linear-gradient(135deg, color-mix(in srgb, var(--cyan-dim) 65%, transparent), color-mix(in srgb, var(--surface-2) 45%, transparent));}
+.verifyrow{display:flex;gap:12px;flex-wrap:wrap;}
+.verifyrow>.idcallout{flex:1;min-width:220px;margin:0;}
 .userrow{display:flex;align-items:center;gap:12px;padding:12px 8px;border-bottom:1px solid var(--border-soft);cursor:pointer;border-radius:10px;transition:background .15s;}
 .userrow:hover{background:color-mix(in srgb, var(--surface-2) 60%, transparent);}
 .userrow img,.userrow .avplaceholder{width:36px;height:36px;border-radius:50%;object-fit:cover;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;}
@@ -2086,7 +2089,7 @@ async function loadSubTab(){
         <button class="primary" data-submit="${p.id}" data-amt="${finalPrice}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" style="width:100%;margin-top:8px;">Submit for verification</button>
       </div></div>`;
   });
-  html += `</div><div class="card"><p class="muted">UPI ID: <b>${UPI_ID}</b>. After paying, tap "I've paid" on your plan above, enter the UPI transaction ID/UTR from your payment app, and submit — the admin will match it and activate your account.</p></div>`;
+  html += `</div><div class="card"><p class="muted">After paying via the button above, tap "I've paid" on your plan, enter the UPI transaction ID/UTR from your payment app, and submit — the admin will match it and activate your account.</p></div>`;
   body.innerHTML += html;
 
   const refBtn = document.getElementById('refCodeApply');
@@ -2591,7 +2594,6 @@ async function renderAdmin(){
     <div class="tab ${S.atab==='manage'?'on':''}" data-t="manage">Manage</div>
     <div class="tab ${S.atab==='users'?'on':''}" data-t="users">Users</div>
     <div class="tab ${S.atab==='plans'?'on':''}" data-t="plans">Plans</div>
-    <div class="tab ${S.atab==='payments'?'on':''}" data-t="payments">💳 Payments</div>
     <div class="tab ${S.atab==='coupons'?'on':''}" data-t="coupons">🎟️ Coupons</div>
     <div class="tab ${S.atab==='feedback'?'on':''}" data-t="feedback">💬 Feedback</div>
     <div class="tab ${S.atab==='rankings'?'on':''}" data-t="rankings">Rankings</div>
@@ -2604,7 +2606,6 @@ async function renderAdmin(){
   if(S.atab==='manage') return adminManage();
   if(S.atab==='users') return adminUsers();
   if(S.atab==='plans') return adminPlans();
-  if(S.atab==='payments') return adminPayments();
   if(S.atab==='coupons') return adminCoupons();
   if(S.atab==='feedback') return adminFeedback();
   if(S.atab==='rankings') return adminRankings();
@@ -3543,35 +3544,88 @@ async function renderSetEditor(){
   };
 }
 
+function numToLetters(n){
+  // 1->A, 26->Z, 27->AA … so referral lists longer than 26 don't break.
+  let s = '';
+  while(n > 0){ n--; s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n/26); }
+  return s;
+}
+function buildReferralTree(users, coupons){
+  const promoterOfCoupon = {};
+  (coupons||[]).forEach(c=> promoterOfCoupon[c.id] = c.promoter_id);
+  const userIds = new Set(users.map(u=>u.id));
+  const childrenByPromoter = {};
+  const childIds = new Set();
+  users.forEach(u=>{
+    const promoterId = u.referred_by_coupon ? promoterOfCoupon[u.referred_by_coupon] : null;
+    if(promoterId && userIds.has(promoterId) && promoterId !== u.id){
+      (childrenByPromoter[promoterId] = childrenByPromoter[promoterId] || []).push(u);
+      childIds.add(u.id);
+    }
+  });
+  const topLevel = users.filter(u=> !childIds.has(u.id));
+  return { topLevel, childrenByPromoter };
+}
 async function adminUsers(){
   const body=document.getElementById('atabBody');
   body.innerHTML = `<div class="card muted">Loading users…</div>`;
-  const { data: users } = await sb.from('profiles').select('*').neq('role','admin').order('created_at',{ascending:false});
-  const { data: pendingPays } = await sb.from('payments').select('user_id').eq('status','pending');
+  const [{ data: users }, { data: pendingPays }, { data: coupons }] = await Promise.all([
+    sb.from('profiles').select('*').neq('role','admin').order('created_at',{ascending:true}),
+    sb.from('payments').select('user_id').eq('status','pending'),
+    sb.from('coupons').select('id,promoter_id')
+  ]);
   const pendingByUser = {}; (pendingPays||[]).forEach(p=> pendingByUser[p.user_id] = (pendingByUser[p.user_id]||0)+1);
+  const promoterIds = new Set((coupons||[]).map(c=>c.promoter_id));
   body.innerHTML = `<div class="card"><h3>Users</h3>
-  <div class="muted" style="margin-bottom:8px;">Click a user to open their full profile, verify payments and manage access — all in one place.</div>
+  <div class="muted" style="margin-bottom:8px;">Click a user to open their full profile, verify payments and manage access — all in one place. Referrers are numbered 1, 2, 3…; the people they referred are nested underneath as 3A, 3B, 3C.</div>
   <input id="userSearch" placeholder="Filter by name, email or college…" style="margin-bottom:10px;">
   <div id="userList"></div></div>`;
   const listEl = document.getElementById('userList');
-  function renderList(filter){
-    const f = (filter||'').toLowerCase();
-    const filtered = (users||[]).filter(u=> !f || (u.name||'').toLowerCase().includes(f) || (u.email||'').toLowerCase().includes(f) || (u.college||'').toLowerCase().includes(f));
-    if(!filtered.length){ listEl.innerHTML = '<p class="muted">No matching users.</p>'; return; }
-    listEl.innerHTML = filtered.map(u=>`<div class="userrow" data-u="${u.id}">
+  function rowHtml(u, idx, nested){
+    const isReferrer = promoterIds.has(u.id);
+    return `<div class="userrow" data-u="${u.id}" style="${nested?'margin-left:26px;padding-left:14px;border-left:2px solid var(--border);':''}">
+      <span class="muted" style="font-family:var(--mono);font-weight:700;min-width:28px;">${idx}</span>
       ${u.avatar_url?`<img src="${u.avatar_url}">`:`<div class="avplaceholder">${(u.name||u.email||'?').charAt(0).toUpperCase()}</div>`}
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;">${escapeHtml(u.name||'(no name)')} ${pendingByUser[u.id]?`<span class="badge pending" style="margin-left:6px;">${pendingByUser[u.id]} payment${pendingByUser[u.id]>1?'s':''} pending</span>`:''}</div>
+        <div style="font-weight:700;">${escapeHtml(u.name||'(no name)')}
+          ${isReferrer?'<span class="badge active" style="margin-left:6px;">Referrer</span>':''}
+          ${pendingByUser[u.id]?`<span class="badge pending" style="margin-left:6px;">${pendingByUser[u.id]} payment${pendingByUser[u.id]>1?'s':''} pending</span>`:''}
+        </div>
         <div class="muted" style="font-size:12.5px;">${escapeHtml(u.email)} ${u.college?'· '+escapeHtml(u.college):''}</div>
       </div>
       <span class="badge ${u.status}">${u.status}</span>
-    </div>`).join('');
+    </div>`;
+  }
+  function renderTree(){
+    const { topLevel, childrenByPromoter } = buildReferralTree(users||[], coupons||[]);
+    let html = '';
+    topLevel.forEach((u,i)=>{
+      const idx = i+1;
+      html += rowHtml(u, idx, false);
+      (childrenByPromoter[u.id]||[]).forEach((child, j)=>{
+        html += rowHtml(child, `${idx}${numToLetters(j+1)}`, true);
+      });
+    });
+    listEl.innerHTML = html || '<p class="muted">No users yet.</p>';
+    bindRows();
+  }
+  function renderFlat(filter){
+    const f = filter.toLowerCase();
+    const filtered = (users||[]).filter(u=> (u.name||'').toLowerCase().includes(f) || (u.email||'').toLowerCase().includes(f) || (u.college||'').toLowerCase().includes(f));
+    if(!filtered.length){ listEl.innerHTML = '<p class="muted">No matching users.</p>'; return; }
+    listEl.innerHTML = filtered.map(u=>rowHtml(u, '•', false)).join('');
+    bindRows();
+  }
+  function bindRows(){
     listEl.querySelectorAll('.userrow').forEach(row=>{
       row.onclick = ()=> openUserModal(row.dataset.u);
     });
   }
-  renderList('');
-  document.getElementById('userSearch').oninput = (e)=> renderList(e.target.value);
+  renderTree();
+  document.getElementById('userSearch').oninput = (e)=>{
+    const term = e.target.value.trim();
+    term ? renderFlat(term) : renderTree();
+  };
 }
 
 // ================= UNIFIED USER MODAL (profile + College ID + payments + actions) =================
@@ -3595,6 +3649,7 @@ async function renderUserModalBody(uid, overlay){
     sb.from('coupons').select('*').eq('promoter_id', uid).order('created_at',{ascending:false})
   ]);
   if(error || !u){ body.innerHTML = `<p style="color:var(--red);">Couldn't load this user — ${error?.message||'not found'}.</p>`; return; }
+  const latestPayment = (payments||[]).find(p=>p.status==='pending') || (payments||[])[0] || null;
   body.innerHTML = `
     <div class="row" style="align-items:center;gap:14px;">
       ${u.avatar_url?`<img src="${u.avatar_url}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;">`:`<div class="avplaceholder" style="width:52px;height:52px;font-size:20px;">${(u.name||u.email||'?').charAt(0).toUpperCase()}</div>`}
@@ -3602,11 +3657,19 @@ async function renderUserModalBody(uid, overlay){
       <span class="badge ${u.status}" style="margin-left:auto;">${u.status}</span>
     </div>
 
-    <div class="idcallout">
-      <div><div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;">College ID — verify before activating</div>
-      <b>${escapeHtml(u.college||'College not set')}</b></div>
-      ${u.college_id_path?`<button class="primary" id="umViewId" style="padding:8px 14px;font-size:13px;">🪪 View College ID</button>`:`<span class="muted">No ID uploaded</span>`}
+    <div class="verifyrow">
+      <div class="idcallout">
+        <div><div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;">College ID</div>
+        <b>${escapeHtml(u.college||'College not set')}</b></div>
+        ${u.college_id_path?`<button class="primary" id="umViewId" style="padding:8px 14px;font-size:13px;">🪪 View College ID</button>`:`<span class="muted">No ID uploaded</span>`}
+      </div>
+      <div class="idcallout utrcallout">
+        <div><div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;">Latest UTR / Txn ID</div>
+        <b style="font-family:var(--mono);">${escapeHtml(latestPayment?.utr_ref || '—')}</b></div>
+        ${latestPayment?`<span class="badge ${latestPayment.status}">${latestPayment.status}</span>`:''}
+      </div>
     </div>
+    <div class="muted" style="font-size:12px;margin:-6px 0 6px;">Match the UTR above against your bank statement, then verify below — right next to the College ID.</div>
 
     <label>Full name</label><input id="umName" value="${(u.name||'').replace(/"/g,'&quot;')}">
     <div class="row" style="gap:10px;">
@@ -3619,7 +3682,7 @@ async function renderUserModalBody(uid, overlay){
     </div>
     <button class="subtle" id="umSaveDetails" style="width:100%;margin-top:6px;">Save details</button>
 
-    ${(promoCoupon&&promoCoupon.length)?`<div class="divider"></div><h3 style="font-size:15px;">🎟️ Referral coupon</h3>
+    ${(promoCoupon&&promoCoupon.length)?`<div class="divider"></div><h3 style="font-size:15px;">🎟️ Referrer — this user's coupon</h3>
       ${promoCoupon.map(c=>`<div class="muted" style="font-size:13px;margin-bottom:4px;">Code <b style="font-family:var(--mono);color:var(--text);">${c.code}</b> — ${c.usage_count}/${c.target_quota} used
         <div class="quotabar"><div style="width:${Math.min(100,Math.round(c.usage_count/c.target_quota*100))}%;"></div></div>
         ${c.milestone_reached?`<span class="badge active">Milestone unlocked — ${c.milestone_discount_pct}% off</span>`:''}</div>`).join('')}` : ''}
@@ -3675,11 +3738,22 @@ async function renderUserModalBody(uid, overlay){
     adminUsers();
   };
   document.getElementById('umDelete').onclick = async ()=>{
-    if(!confirm(`Permanently delete ${u.name||u.email}? This removes their profile, devices, sets and rank history — this can't be undone.`)) return;
-    await sb.from('devices').delete().eq('user_id', uid);
-    const { error: delErr } = await sb.from('profiles').delete().eq('id', uid);
-    if(delErr){ toast('Delete failed — '+delErr.message); return; }
-    toast('User deleted');
+    if(!confirm(`Permanently delete ${u.name||u.email}? This wipes their profile, devices, payments, sets, attempts and coupons from Supabase auth + database — this can't be undone.`)) return;
+    const delBtn = document.getElementById('umDelete');
+    delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+    // Hard-delete requires the service-role key, which must never sit in
+    // frontend code — so this calls the `delete-user` Edge Function, which
+    // verifies the caller is an admin, wipes every dependent row, and then
+    // deletes the actual auth.users record (not just the profiles row).
+    // Deleting only `profiles` — the old bug — left the auth account alive,
+    // so the profile came back the next time that person logged in.
+    const { data, error: fnErr } = await sb.functions.invoke('delete-user', { body: { user_id: uid } });
+    if(fnErr || !data?.success){
+      toast('Delete failed — '+(data?.error || fnErr?.message || 'unknown error'));
+      delBtn.disabled = false; delBtn.textContent = '🗑️ Permanently delete';
+      return;
+    }
+    toast('User permanently deleted');
     overlay.remove();
     adminUsers();
   };
@@ -3731,70 +3805,6 @@ async function adminPlans(){
     adminPlans();
   };
   body.querySelectorAll('.delBtn').forEach(b=>b.onclick=async ()=>{ await sb.from('plans').delete().eq('id', b.dataset.id); adminPlans(); });
-}
-
-// ================= ADMIN PAYMENTS (UPI) =================
-async function adminPayments(){
-  const body=document.getElementById('atabBody');
-  body.innerHTML = `<div class="card muted">Loading payments…</div>`;
-  const { data: payments, error } = await sb.from('payments').select('*').order('created_at',{ascending:false});
-  if(error){
-    body.innerHTML = `<div class="card"><h3>💳 Payments</h3><p class="muted" style="color:var(--red);">Couldn't load — ${error.message}. Make sure the payments table has been added in Supabase.</p></div>`;
-    return;
-  }
-  if(!payments || !payments.length){
-    body.innerHTML = `<div class="card"><h3>💳 Payments</h3><p class="muted">No payments recorded yet. UPI ID shown to students: <b>${UPI_ID}</b></p></div>`;
-    return;
-  }
-  const userIds = [...new Set(payments.map(p=>p.user_id))];
-  const { data: users } = await sb.from('profiles').select('id,name,email').in('id', userIds);
-  const byId = {}; (users||[]).forEach(u=>byId[u.id]=u);
-  const totalVerified = payments.filter(p=>p.status==='verified').reduce((s,p)=>s+(+p.amount||0),0);
-  body.innerHTML = `<div class="card"><h3>💳 Payments</h3>
-  <p class="muted">UPI ID: <b>${UPI_ID}</b> · Total verified: <b>₹${totalVerified}</b></p>
-  <div style="overflow-x:auto;"><table id="paymentsTbl"><tr><th>Date</th><th>Student</th><th>Plan</th><th>Amount</th><th>UTR / Txn ID</th><th>Status</th><th></th></tr>
-  ${payments.map(p=>{
-    const u = byId[p.user_id];
-    return `<tr data-p="${p.id}" data-uid="${p.user_id}" data-plan="${p.plan_id||''}">
-      <td>${p.created_at?new Date(p.created_at).toLocaleString():''}</td>
-      <td>${u?escapeHtml(u.name||u.email):'—'}</td>
-      <td>${escapeHtml(p.plan_name||'')}</td>
-      <td>₹${p.amount}</td>
-      <td style="font-family:var(--mono);">${escapeHtml(p.utr_ref||'—')}</td>
-      <td><span class="badge ${p.status}">${p.status}</span></td>
-      <td class="row" style="gap:6px;">
-        ${p.status!=='verified'?`<button class="primary verifyBtn" style="padding:6px 10px;font-size:12px;">Verify & Activate</button>`:''}
-        ${p.status==='pending'?`<button class="danger rejectBtn" style="padding:6px 10px;font-size:12px;">Reject</button>`:''}
-      </td></tr>`;
-  }).join('')}
-  </table></div></div>`;
-  body.querySelectorAll('tr[data-p]').forEach(tr=>{
-    const pid = tr.dataset.p, uid = tr.dataset.uid, planId = tr.dataset.plan;
-    const verifyBtn = tr.querySelector('.verifyBtn');
-    if(verifyBtn) verifyBtn.onclick = async ()=>{
-      verifyBtn.disabled = true;
-      let expiry = null;
-      if(planId){
-        const { data: plan } = await sb.from('plans').select('duration_days').eq('id', planId).maybeSingle();
-        if(plan){
-          const base = new Date();
-          expiry = new Date(base.getTime() + plan.duration_days*24*60*60*1000).toISOString();
-        }
-      }
-      const { error: pErr } = await sb.from('payments').update({status:'verified'}).eq('id', pid);
-      const updateFields = {status:'active'};
-      if(expiry) updateFields.subscription_expiry = expiry;
-      const { error: uErr } = await sb.from('profiles').update(updateFields).eq('id', uid);
-      if(pErr || uErr){ toast('Failed — '+(pErr?.message||uErr?.message)); verifyBtn.disabled=false; return; }
-      toast('Payment verified & user activated');
-      adminPayments();
-    };
-    const rejectBtn = tr.querySelector('.rejectBtn');
-    if(rejectBtn) rejectBtn.onclick = async ()=>{
-      await sb.from('payments').update({status:'rejected'}).eq('id', pid);
-      adminPayments();
-    };
-  });
 }
 
 // ================= ADMIN COUPONS (referral / milestone system) =================
