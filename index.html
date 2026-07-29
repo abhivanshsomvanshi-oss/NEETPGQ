@@ -102,6 +102,7 @@ label{font-size:12.5px;color:var(--text-dim);display:block;margin:11px 0 5px;tex
 .badge.pending{background:#392b10;color:var(--amber);box-shadow:inset 0 0 0 1px rgba(239,165,62,.35);}
 .badge.revoked{background:#3d1519;color:var(--red);box-shadow:inset 0 0 0 1px rgba(240,82,90,.35);}
 .badge.unset{background:#332711;color:var(--text-dim);box-shadow:inset 0 0 0 1px var(--border);}
+.locked-blur{filter:blur(6px);-webkit-filter:blur(6px);user-select:none;cursor:default;}
 .badge.verified{background:#123822;color:var(--green);box-shadow:inset 0 0 0 1px rgba(48,184,122,.35);}
 .badge.rejected{background:#3d1519;color:var(--red);box-shadow:inset 0 0 0 1px rgba(240,82,90,.35);}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
@@ -1039,7 +1040,8 @@ async function loadQbankList(isActive){
   let html = '<div class="grid">';
   qbanks.forEach((qb,i)=>{
     const count = counts[i].count;
-    html += `<div class="card" style="cursor:pointer;" data-qb="${qb.id}"><h3>${qb.name}</h3><div class="muted">${count||0} sections</div></div>`;
+    const nameHtml = isActive ? qb.name : `<span class="locked-blur" title="Unlocks after admin activates your account">${qb.name}</span>`;
+    html += `<div class="card" style="cursor:pointer;" data-qb="${qb.id}"><h3>${nameHtml}</h3><div class="muted">${count||0} sections</div></div>`;
   });
   html += '</div>';
   body.innerHTML += html;
